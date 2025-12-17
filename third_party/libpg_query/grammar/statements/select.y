@@ -1065,9 +1065,9 @@ match_recognize_clause:
         n->skip_to_next_row = (bool) $7;
 		n->skip_past_last_row = (bool) !$7;
 
-		/* TODO: GRM4, GRM5, TW1 */
+		/* TODO: GRM5, TW1 */
         n->within = nullptr;
-        n->pattern = nullptr;
+        n->pattern = $9;
         n->define = nullptr;
 
         $$ = (PGNode *) n;
@@ -1097,17 +1097,11 @@ mr_sortby:
 				}
 		;
 
+/* change here for GRM5 */
 mr_measures_clause:
-			MEASURES mr_measure_list
+			MEASURES target_list
 				{
 					$$ = $2;		
-				}
-;
-
-/* change here for GRM5 */
-mr_measure_list:
-				{
-					$$ = nullptr;
 				}
 ;
 
@@ -1131,7 +1125,7 @@ mr_after_match_skip_clause:
 
 mr_skip_option:
 			TO NEXT ROW { $$ = true }
-			| PAST LAST_P ROW { $$ = false }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp
+			| PAST LAST_P ROW { $$ = false }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp */
 
 
 /* change here for TW1 */
@@ -1147,16 +1141,9 @@ mr_opt_within_clause:
 ;
 
 mr_pattern_clause:
-			PATTERN '(' mr_regex ')'
+			PATTERN '(' Sconst ')'
 				{
 					$$ = $3;
-				}
-;
-
-/* change here for GRM4 */
-mr_regex:							
-				{
-					$$ = nullptr;
 				}
 ;
 

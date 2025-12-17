@@ -530,7 +530,7 @@ typedef struct PGMatchRecognize {
 	bool 		skip_to_next_row;		// mutually exclusive with skip_past_last_row
 	bool		skip_past_last_row; 	// redundant but kept for clarity
 	PGNode		*within;
-    PGNode      *pattern;
+    char      *pattern;
     PGList      *define;
 } PGMatchRecognize;
 
