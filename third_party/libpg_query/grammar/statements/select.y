@@ -1099,9 +1099,115 @@ mr_sortby:
 
 /* change here for GRM5 */
 mr_measures_clause:
-			MEASURES target_list
+			MEASURES mr_measure_list
 				{
 					$$ = $2;		
+				}
+;
+
+mr_measure_list:
+			mr_measure
+				{
+					$$ = list_make1($1);
+				}
+			| mr_measure_list ',' mr_measure
+				{
+					$$ = lappend($1, $3);
+				}
+;
+
+mr_measure:
+			mr_measure_expr AS ColLabelOrString
+				{
+					PGResTarget *res = makeNode(PGResTarget);
+					res->name = $3;
+					res->indirection = NIL;
+					res->val = $1;
+					res->location = @1;
+					$$ = (PGNode *) res;
+				}
+			| mr_measure_expr IDENT
+				{
+					PGResTarget *res = makeNode(PGResTarget);
+					res->name = $2;
+					res->indirection = NIL;
+					res->val = $1;
+					res->location = @1;
+					$$ = (PGNode *) res;
+				}
+			| mr_measure_expr
+				{
+					PGResTarget *res = makeNode(PGResTarget);
+					res->name = NULL;
+					res->indirection = NIL;
+					res->val = $1;
+					res->location = @1;
+					$$ = (PGNode *) res;
+				}
+;
+
+mr_measure_expr:
+			mr_nav_expr
+				{
+					$$ = $1;
+				}
+			| mr_agg_expr
+				{
+					$$ = $1;
+				}
+;
+
+mr_nav_expr:
+			FIRST_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("first"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| LAST_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("last"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+;
+
+mr_agg_expr:
+			MIN '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("min"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| MAX '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("max"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| SUM '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("sum"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| AVG '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("avg"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| COUNT '(' '*' ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), NIL, @1);
+					n->agg_star = true;
+					$$ = (PGNode *) n;
+				}
+			| COUNT '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+;
+
+mr_value_ref:
+			columnref
+				{
+					$$ = $1;
 				}
 ;
 
