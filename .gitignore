@@ -364,3 +364,5 @@ beispiel.duckdb
 generate_n_run.sh
 third_party/libpg_query/src_backend_parser_gram.cpp
 .gitignore
+third_party/libpg_query/include/parser/gram.hpp
+third_party/libpg_query/include/parser/kwlist.hpp

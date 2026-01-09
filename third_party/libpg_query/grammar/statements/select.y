@@ -1126,24 +1126,6 @@ mr_measure:
 					res->location = @1;
 					$$ = (PGNode *) res;
 				}
-			| mr_measure_expr IDENT
-				{
-					PGResTarget *res = makeNode(PGResTarget);
-					res->name = $2;
-					res->indirection = NIL;
-					res->val = $1;
-					res->location = @1;
-					$$ = (PGNode *) res;
-				}
-			| mr_measure_expr
-				{
-					PGResTarget *res = makeNode(PGResTarget);
-					res->name = NULL;
-					res->indirection = NIL;
-					res->val = $1;
-					res->location = @1;
-					$$ = (PGNode *) res;
-				}
 ;
 
 mr_measure_expr:
@@ -1171,33 +1153,33 @@ mr_nav_expr:
 ;
 
 mr_agg_expr:
-			MIN '(' mr_value_ref ')'
+			MIN_P '(' mr_value_ref ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("min"), list_make1($3), @1);
 					$$ = (PGNode *) n;
 				}
-			| MAX '(' mr_value_ref ')'
+			| MAX_P '(' mr_value_ref ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("max"), list_make1($3), @1);
 					$$ = (PGNode *) n;
 				}
-			| SUM '(' mr_value_ref ')'
+			| SUM_P '(' mr_value_ref ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("sum"), list_make1($3), @1);
 					$$ = (PGNode *) n;
 				}
-			| AVG '(' mr_value_ref ')'
+			| AVG_P '(' mr_value_ref ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("avg"), list_make1($3), @1);
 					$$ = (PGNode *) n;
 				}
-			| COUNT '(' '*' ')'
+			| COUNT_P '(' '*' ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), NIL, @1);
 					n->agg_star = true;
 					$$ = (PGNode *) n;
 				}
-			| COUNT '(' mr_value_ref ')'
+			| COUNT_P '(' mr_value_ref ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), list_make1($3), @1);
 					$$ = (PGNode *) n;
