@@ -1068,20 +1068,26 @@ match_recognize_clause:
 		/* TODO: GRM5, TW1 */
         n->within = nullptr;
         n->pattern = $9;
-        n->define = nullptr;
+        n->define = (PGList *) $10;
 
         $$ = (PGNode *) n;
     }
 ;
 
 mr_opt_partition_clause:
-			opt_partition_clause {$$ = $1}	/* use the built-in partition clause */
+			opt_partition_clause {$$ = $1;}	/* use the built-in partition clause */
 ;
 
 mr_order_clause:
 			ORDER BY mr_sortby			
 				{
 					$$ = list_make1($3);	/* exactly one expression allowed */
+				}
+			| /* EMPTY */
+				{
+					ereport(ERROR,
+                	(errmsg("MATCH_RECOGNIZE requires ORDER BY clause")));
+
 				}
 ;
 
@@ -1212,8 +1218,8 @@ mr_after_match_skip_clause:
 ;
 
 mr_skip_option:
-			TO NEXT ROW { $$ = true }
-			| PAST LAST_P ROW { $$ = false }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp */
+			TO NEXT ROW { $$ = true; }
+			| PAST LAST_P ROW { $$ = false; }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp */
 
 
 /* change here for TW1 */
@@ -1235,19 +1241,36 @@ mr_pattern_clause:
 				}
 ;
 
-/* change here for GRM5 */
 mr_define_clause:
-			DEFINE  target_list		
-				{
-					$$ = $2;
-				}
+        DEFINE mr_define_list
+        {
+            $$ = $2;
+        }
 ;
 
 mr_define_list:
-				{
-					$$ = nullptr;
-				}
+        mr_define_item
+        {
+            $$ = list_make1($1);
+        }
+    |   mr_define_list ',' mr_define_item
+        {
+            $$ = lappend($1, $3);
+        }
 ;
+
+/* A AS <boolean-expr> */
+mr_define_item:
+        ColId AS a_expr
+        {
+            PGResTarget *t = makeNode(PGResTarget);
+            t->name = $1;
+            t->val  = $3;
+            t->location = @1;
+            $$ = (PGNode *) t;
+        }
+;
+
 
 /*****************************************************************************
  *

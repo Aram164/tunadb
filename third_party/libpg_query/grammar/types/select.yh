@@ -136,9 +136,13 @@
 
 %type <node> match_recognize_clause
 %type <list> mr_opt_partition_clause mr_order_clause 
-%type <list> mr_measures_clause mr_define_clause mr_define_list mr_measure_list
+%type <list> mr_measures_clause mr_measure_list
 %type <sortby> mr_sortby
 %type <boolean> mr_rows_per_match_clause mr_after_match_skip_clause, mr_skip_option
 %type <node> mr_opt_within_clause  
 %type <str> mr_pattern_clause
 %type <node> mr_measure mr_measure_expr mr_nav_expr mr_agg_expr mr_value_ref
+
+
+%type <node> mr_define_item  
+%type <list> mr_define_clause mr_define_list 
