@@ -522,7 +522,7 @@ typedef struct PGRangeFunction {
 
 typedef struct PGMatchRecognize {
 	PGNodeTag type;
-	PGNode      *table_ref;      
+	PGNode      *source;      
     PGList      *partition;
     PGList      *order;
     PGList      *measures;

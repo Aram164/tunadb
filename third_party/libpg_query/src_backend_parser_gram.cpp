@@ -27725,7 +27725,7 @@ yyreduce:
 #line 1399 "third_party/libpg_query/grammar/statements/select.y"
     { 
 					PGMatchRecognize *mr = (PGMatchRecognize *) (yyvsp[(2) - (2)].node);
-        			mr->table_ref = (yyvsp[(1) - (2)].node);
+        			mr->source = (yyvsp[(1) - (2)].node);
 					(yyval.node) = (yyvsp[(1) - (2)].node);
 				;}
     break;

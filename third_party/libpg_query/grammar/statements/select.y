@@ -1398,7 +1398,7 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 			| table_ref match_recognize_clause
 				{ 
 					PGMatchRecognize *mr = (PGMatchRecognize *) $2;
-        			mr->table_ref = $1;
+        			mr->source = $1;
 					$$ = $1;
 				}
 		;
