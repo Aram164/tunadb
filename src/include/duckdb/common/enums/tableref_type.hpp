@@ -29,6 +29,7 @@ enum class TableReferenceType : uint8_t {
 	COLUMN_DATA = 11,    // column data collection
 	DELIM_GET = 12,      // Delim get ref
 	BOUND_TABLE_REF = 13 // Bound table ref
+	// TODO: PAR1 add MATCH_RECOGNIZE table reference type.
 };
 
 } // namespace duckdb

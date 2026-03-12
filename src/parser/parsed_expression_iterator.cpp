@@ -235,6 +235,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
+	// TODO: PAR1/DEF1 traverse MatchRecognizeRef expressions (partition/order/define/measures/within).
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = ref.Cast<SubqueryRef>();
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);

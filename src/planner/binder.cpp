@@ -174,6 +174,7 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
 	case TableReferenceType::CTE:
+	// TODO: BIN1 add Bind(MatchRecognizeRef) -> BoundMatchRecognizeRef.
 	case TableReferenceType::INVALID:
 	default:
 		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));

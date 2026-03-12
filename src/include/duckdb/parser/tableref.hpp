@@ -77,4 +77,5 @@ protected:
 	string AliasToString(const vector<string> &column_name_alias) const;
 	string SampleToString() const;
 };
+// TODO: PAR1 add MatchRecognizeRef (TableRef) with source/partition/order/measures/pattern/define/within.
 } // namespace duckdb

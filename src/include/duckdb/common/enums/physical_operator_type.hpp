@@ -37,6 +37,7 @@ enum class PhysicalOperatorType : uint8_t {
 	STREAMING_WINDOW,
 	PIVOT,
 	COPY_DATABASE,
+	// TODO: PHY1 add PHYSICAL_MATCH_RECOGNIZE (blocking).
 
 	// -----------------------------
 	// Scans

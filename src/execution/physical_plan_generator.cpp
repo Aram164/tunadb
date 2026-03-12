@@ -93,6 +93,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalTopN>());
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return CreatePlan(op.Cast<LogicalCopyToFile>());
+	// TODO: PHY1 create PhysicalMatchRecognize plan for LogicalMatchRecognize.
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		return CreatePlan(op.Cast<LogicalDummyScan>());
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:

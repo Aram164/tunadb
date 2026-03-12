@@ -1065,7 +1065,7 @@ match_recognize_clause:
         n->skip_to_next_row = (bool) $7;
 		n->skip_past_last_row = (bool) !$7;
 
-		/* TODO: GRM5, TW1 */
+		// TODO: GRM5/TW1 parse and store WITHIN + structured MEASURES/DEFINE data.
         n->within = nullptr;
         n->pattern = $9;
         n->define = (PGList *) $10;
@@ -1085,6 +1085,7 @@ mr_order_clause:
 				}
 			| /* EMPTY */
 				{
+					// TODO: GRM6 add clearer diagnostics with location info.
 					ereport(ERROR,
                 	(errmsg("MATCH_RECOGNIZE requires ORDER BY clause")));
 
@@ -1195,6 +1196,7 @@ mr_agg_expr:
 mr_value_ref:
 			columnref
 				{
+					// TODO: GRM5 restrict to var.col and support COUNT(var.*).
 					$$ = $1;
 				}
 ;
@@ -1226,6 +1228,7 @@ mr_skip_option:
 mr_opt_within_clause:				
 			WITHIN
 				{
+					// TODO: TW1 parse WITHIN time window expression.
 					$$ = nullptr;
 				}
 			| /* EMPTY */
@@ -1420,6 +1423,7 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 				}
 			| table_ref match_recognize_clause
 				{ 
+					// TODO: GRM2 return PGMatchRecognize node (currently returns source table only).
 					PGMatchRecognize *mr = (PGMatchRecognize *) $2;
         			mr->source = $1;
 					$$ = $1;

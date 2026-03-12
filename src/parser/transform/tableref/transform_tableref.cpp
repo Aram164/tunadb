@@ -18,6 +18,7 @@ unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNod
 		return TransformRangeFunction(PGCast<duckdb_libpgquery::PGRangeFunction>(n));
 	case duckdb_libpgquery::T_PGPivotExpr:
 		return TransformPivot(PGCast<duckdb_libpgquery::PGPivotExpr>(n));
+	// TODO: PAR3 handle PGMatchRecognize -> MatchRecognizeRef transformation.
 	default:
 		throw NotImplementedException("From Type %d not supported", n.type);
 	}
