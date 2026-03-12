@@ -102,6 +102,7 @@ class EmptyTableRef;
 class ExpressionListRef;
 class ColumnDataRef;
 class PivotRef;
+class MatchRecognizeRef;
 class ShowRef;
 
 //===--------------------------------------------------------------------===//

@@ -235,6 +235,25 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
+	case TableReferenceType::MATCH_RECOGNIZE: {
+		auto &mr_ref = ref.Cast<MatchRecognizeRef>();
+		if (mr_ref.source) {
+			EnumerateTableRefChildren(*mr_ref.source, expr_callback, ref_callback);
+		}
+		for (auto &partition_expr : mr_ref.partition_by) {
+			expr_callback(partition_expr);
+		}
+		for (auto &order : mr_ref.order_by) {
+			expr_callback(order.expression);
+		}
+		for (auto &measure : mr_ref.measures) {
+			expr_callback(measure.expression);
+		}
+		for (auto &define : mr_ref.define) {
+			expr_callback(define.condition);
+		}
+		break;
+	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = ref.Cast<SubqueryRef>();
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);

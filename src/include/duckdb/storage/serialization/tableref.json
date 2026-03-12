@@ -246,6 +246,65 @@
     ]
   },
   {
+    "class": "MatchRecognizeRef",
+    "base": "TableRef",
+    "enum": "MATCH_RECOGNIZE",
+    "members": [
+      {
+        "id": 200,
+        "name": "source",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "partition_by",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 202,
+        "name": "order_by",
+        "type": "vector<OrderByNode>"
+      },
+      {
+        "id": 203,
+        "name": "measures",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 204,
+        "name": "one_row_per_match",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 205,
+        "name": "skip_to_next_row",
+        "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "skip_past_last_row",
+        "type": "bool",
+        "default": "true"
+      },
+      {
+        "id": 207,
+        "name": "within",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 208,
+        "name": "pattern",
+        "type": "string"
+      },
+      {
+        "id": 209,
+        "name": "definitions",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
     "class": "ShowRef",
     "base": "TableRef",
     "enum": "SHOW_REF",
