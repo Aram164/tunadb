@@ -138,7 +138,7 @@
 %type <list> mr_opt_partition_clause mr_order_clause 
 %type <list> mr_measures_clause mr_measure_list
 %type <sortby> mr_sortby
-%type <boolean> mr_rows_per_match_clause mr_after_match_skip_clause, mr_skip_option
+%type <ival> mr_rows_per_match_clause mr_after_match_skip_clause mr_skip_option
 %type <node> mr_opt_within_clause  
 %type <str> mr_pattern_clause
 %type <node> mr_measure mr_measure_expr mr_nav_expr mr_agg_expr mr_value_ref
