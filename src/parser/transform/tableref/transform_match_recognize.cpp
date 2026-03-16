@@ -50,7 +50,7 @@ unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGM
 				throw ParserException("MATCH_RECOGNIZE DEFINE: expected ResTarget node");
 			}
 			auto &target = PGCast<duckdb_libpgquery::PGResTarget>(*raw_node);
-			VariableDefinition entry;
+			DefineDefinition entry;
 			if (target.name) {
 				entry.variable_name = target.name;
 			}
