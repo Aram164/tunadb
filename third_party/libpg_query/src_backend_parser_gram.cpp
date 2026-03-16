@@ -26892,6 +26892,7 @@ yyreduce:
         // TODO: GRM5/TW1 parse and store WITHIN + structured MEASURES/DEFINE data.
 
         n->within = nullptr;
+
         n->pattern = (yyvsp[-2].str);
         n->define = (PGList *) (yyvsp[-1].list);
 
@@ -30974,7 +30975,7 @@ yyreduce:
                                 {
 					(yyval.list) = (yyvsp[0].list);
 				}
-#line 30978 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 30977 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 1262: /* c_expr_list_opt_comma: c_expr_list ','  */

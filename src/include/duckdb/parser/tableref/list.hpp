@@ -4,6 +4,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 // TODO: PAR1 include match_recognize_ref.hpp when implemented.
 #include "duckdb/parser/tableref/showref.hpp"

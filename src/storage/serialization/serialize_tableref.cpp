@@ -39,6 +39,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = MatchRecognizeRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
 		break;

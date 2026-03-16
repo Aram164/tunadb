@@ -173,6 +173,8 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	case TableReferenceType::BOUND_TABLE_REF:
 		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		throw NotImplementedException("MATCH_RECOGNIZE binding is not implemented yet");
 	case TableReferenceType::CTE:
 	// TODO: BIN1 add Bind(MatchRecognizeRef) -> BoundMatchRecognizeRef.
 	case TableReferenceType::INVALID:

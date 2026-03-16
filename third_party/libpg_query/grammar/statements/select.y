@@ -1126,12 +1126,14 @@ match_recognize_clause:
         // TODO: GRM5/TW1 parse and store WITHIN + structured MEASURES/DEFINE data.
 
         n->within = nullptr;
+
         n->pattern = $9;
         n->define = (PGList *) $10;
 
         $$ = (PGNode *) n;
 	}
 ;
+
 
 mr_opt_partition_clause:
 			opt_partition_clause {$$ = $1;}	/* use the built-in partition clause */
@@ -1148,6 +1150,7 @@ mr_order_clause:
 				}
 ;
 
+
 mr_sortby:	
 			a_expr
 				{
@@ -1160,7 +1163,6 @@ mr_sortby:
 				}
 		;
 
-/* change here for GRM5 */
 mr_measures_clause:
 			MEASURES mr_measure_list
 				{
@@ -1171,6 +1173,7 @@ mr_measures_clause:
 					$$ = NIL; 
 				}
 ;
+
 
 mr_measure_list:
 			mr_measure
@@ -1311,6 +1314,7 @@ mr_define_clause:
 				$$ = NIL; 
 			}
 ;
+
 
 mr_define_list:
         mr_define_item
