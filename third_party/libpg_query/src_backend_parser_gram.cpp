@@ -26880,7 +26880,7 @@ yyreduce:
                      parser_errposition((yylsp[0]))));
         }
 
-        /* Jetzt ist alles Pflichtmäßige vorhanden -> Node befüllen */
+        
         n->partition = (PGList *) (yyvsp[-8].list);
         n->order = (PGList *) (yyvsp[-7].list);
         n->measures = (PGList *) (yyvsp[-6].list);
