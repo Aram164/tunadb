@@ -14,6 +14,7 @@
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -174,7 +175,8 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		result = Bind(ref.Cast<BoundRefWrapper>());
 		break;
 	case TableReferenceType::MATCH_RECOGNIZE:
-		throw NotImplementedException("MATCH_RECOGNIZE binding is not implemented yet");
+		result = Bind(ref.Cast<MatchRecognizeRef>());
+		break;
 	case TableReferenceType::CTE:
 	// TODO: BIN1 add Bind(MatchRecognizeRef) -> BoundMatchRecognizeRef.
 	case TableReferenceType::INVALID:
