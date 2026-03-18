@@ -5,16 +5,6 @@
 
 namespace duckdb {
 
-/* gebundenen Table-Ref Node (z. B. BoundMatchRecognizeRef) auf Basis des MatchRecognizeRef Nodes produzieren:
-- die gebundene Eingabetabelle
-- die gebundenen Ausdrücke für PARTITION BY und ORDER BY
-- die Menge von PATTERN-Variablen aus der PATTERN-Klausel (z. B. A, B, C)
-- die dazugehörigen gebundenen boolschen Ausdrücke aus DEFINE 
-- die gebundenen Informationen für MEASURES (Funktionen + Variablen + Spalten)
-- das Ausgabeschema für MATCH_RECOGNIZE (Namen + Typen aus MEASURES) 
-*/
-
-
 BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
     // bind the child table in a child binder
 	BoundMatchRecognizeRef result;
@@ -49,6 +39,41 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	
     bind_context.AddGenericBinding(result.bind_index, alias, names, types);
 	MoveCorrelatedExpressions(*result.child_binder);
+
+    /* 
+    BIN2: Binden der DEFINE-Klausel:  
+    - Extrahierung der PATTERN-Variablen:
+        - traversieren des AST's
+        - verwendete Patternvariablen einsammeln, die auch für Validierung von DEFINE/MEASURES relevant sind
+    - DEFINE validieren: für jedes DEFINE X AS ... überprüfen, ob X innerhalb des PATTERNs vorkommt -> sonst Fehler
+        -  Wildcards sollen expliziert definiert werden
+    - jede DEFINE Condition muss als boolscher Ausdruck gebunden werden
+    - auch Referenzen der Form ,,var.col'' erlauben (z. B. A.val < B.val):
+        - ,,var'' muss vorhandene PATTERN-Variable repräsentieren und ,,col'' tatsächliche Eingabespalte (Attribut)
+    - PREV zunächst minimal unterstützen (nur PREV(col), col muss existieren, Typ übernehmen)
+        - eigentliche Semantik kann später ergänzt werden
+    - Für jede dieser Conditions muss Typ-Check stattfinden: liefert Ausdruck auch wirklich boolschen Wert zurück? 
+    - darauf achten, dass jeder DEFINE Ausdruck auf korrekten Typ überprüft wird
+    */
+
+
+    /* 
+    BIN3: Binden von MEASURES und dazugehöriges Ausgabeschema:
+    - Funktionen FIRST, LAST, COUNT, MIN, MAX, SUM, AVG unterstützen
+    - unbekannte Funktionalität aufgerufen -> Fehler auswerfen
+    - Ausdrücke wie ,,var.col'' auflösen: 
+        - ,,var'' muss vorhandene PATTERN-Variable repräsentieren
+        - ,,col'' tatsächliche Spalte (Attribut)
+    - Zuordnung von Typen für Funktionen:
+        - z.B. COUNT -> BIGINT, SUM -> DOUBLE, AVG -> DOUBLE
+        - FIRST/LAST/MIN/MAX -> selber Typ, wie dazugehöriges Attribut (Spalte))
+    - Ausgabeschema der Query: alle MEASURES Spalten (inkl deren Namen) auflisten
+    - gebundener Knoten für MEASURES soll enthalten: 
+        - Funktionen (FIRST/LAST/..)
+        - welche dazugehörigen PATTERN-Variablen referenziert werden
+        - welchen Typ Eingabespalte hat
+        - Ausgabenamen + Ausgabetyp
+    */
 
 	BoundStatement result_statement;
     result_statement.names = std::move(names);
