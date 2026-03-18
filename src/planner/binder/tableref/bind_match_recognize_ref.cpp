@@ -5,6 +5,28 @@
 
 namespace duckdb {
 
+unordered_set<string> ExtractPatternVars(string pattern) {
+    unordered_set<string> pattern_vars;
+    string var;  
+    for (auto c : pattern) {
+        if (isalpha(c)) {
+            var += c;
+        } 
+        else if (c == '*' || c == '+' || c == '?' || c == '|' || c == '(' || c == ')' || c == ' ' ) {
+            if (!var.empty()) {
+                pattern_vars.insert(var);
+                var.clear();
+            }
+        } 
+        else {
+            throw SyntaxException("Invalid character '%c' in PATTERN", c);
+        }
+    }
+    if (!var.empty()) {
+        pattern_vars.insert(var);
+    }
+}
+
 BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
     // bind the child table in a child binder
 	BoundMatchRecognizeRef result;
@@ -41,21 +63,37 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	MoveCorrelatedExpressions(*result.child_binder);
 
     /* 
-    BIN2: Binden der DEFINE-Klausel:  
-    - Extrahierung der PATTERN-Variablen:
-        - traversieren des AST's
-        - verwendete Patternvariablen einsammeln, die auch für Validierung von DEFINE/MEASURES relevant sind
-    - DEFINE validieren: für jedes DEFINE X AS ... überprüfen, ob X innerhalb des PATTERNs vorkommt -> sonst Fehler
-        -  Wildcards sollen expliziert definiert werden
-    - jede DEFINE Condition muss als boolscher Ausdruck gebunden werden
-    - auch Referenzen der Form ,,var.col'' erlauben (z. B. A.val < B.val):
+    BIN2: Binden der DEFINE-Klausel: 
+    TODO: 
+    - auch Referenzen der Form ,,var.col'' erlauben (z.B. A.val < B.val):
         - ,,var'' muss vorhandene PATTERN-Variable repräsentieren und ,,col'' tatsächliche Eingabespalte (Attribut)
     - PREV zunächst minimal unterstützen (nur PREV(col), col muss existieren, Typ übernehmen)
-        - eigentliche Semantik kann später ergänzt werden
-    - Für jede dieser Conditions muss Typ-Check stattfinden: liefert Ausdruck auch wirklich boolschen Wert zurück? 
-    - darauf achten, dass jeder DEFINE Ausdruck auf korrekten Typ überprüft wird
+        - Semantik kann später ergänzt werden
     */
 
+    // extract all variables from PATTERN
+    unordered_set<string> pattern_vars = ExtractPatternVars(ref.pattern);
+
+    // bind DEFINE
+    for (auto &define : ref.define) {
+        // Validate DEFINE: for each 'DEFINE X AS …', check if X is contained in PATTERN
+        const auto &var = define.variable_name;
+        if (!pattern_vars.count(define.variable_name)) {
+            throw BinderException("DEFINE variable '%s' does not appear in PATTERN", var);
+        }
+
+        auto bound_expr = expr_binder.Bind(define.condition);
+        if (!bound_expr) {
+            throw BinderException("Invalid DEFINE condition for variable '%s': %s", define.variable_name.c_str(), define.condition->ToString());
+        }
+
+        // type check: each DEFINE condition must be a boolean expression
+        if (bound_expr->return_type != LogicalType::BOOLEAN) {
+            throw BinderException("DEFINE condition for '%s' must return BOOLEAN, got %s", define.variable_name.c_str(), bound_expr->return_type.ToString());
+        }
+
+        result.defines.emplace_back(define.variable_name, std::move(bound_expr));
+    }
 
     /* 
     BIN3: Binden von MEASURES und dazugehöriges Ausgabeschema:

@@ -14,6 +14,17 @@
 
 namespace duckdb {
 
+struct BoundDefine {
+	string variable_name;
+	unique_ptr<Expression> condition;
+
+	BoundDefine() = default;
+	BoundDefine(string variable_name, unique_ptr<Expression> condition)
+		: variable_name(std::move(variable_name)), condition(std::move(condition)) {
+	}
+};
+	
+
 class BoundMatchRecognizeRef {
 public:
 	//! The bind index exported by the bound source relation
@@ -26,6 +37,8 @@ public:
 	vector<unique_ptr<Expression>> partition_by;
 	//! The bound ORDER BY keys
 	vector<BoundOrderByNode> order_by;
+	//! the bound DEFINE entries
+	vector<BoundDefine> defines;
 	//! The schema currently exported by the relation
 	vector<string> names;
 	vector<LogicalType> types;
