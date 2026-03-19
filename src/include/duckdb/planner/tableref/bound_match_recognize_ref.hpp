@@ -37,8 +37,14 @@ public:
 	vector<unique_ptr<Expression>> partition_by;
 	//! The bound ORDER BY keys
 	vector<BoundOrderByNode> order_by;
-	//! the bound DEFINE entries
+	//! The bound DEFINE entries
 	vector<BoundDefine> defines;
+	//! The output schema for matches: ONE ROW PER MATCH or ALL ROWS PER MATCH
+	bool one_row_per_match = true;
+	//! The skip logic: AFTER MATCH SKIP PAST LAST ROW or TO NEXT ROW
+	bool skip_to_next_row = false;
+	//! The pattern string
+	string pattern;
 	//! The schema currently exported by the relation
 	vector<string> names;
 	vector<LogicalType> types;
