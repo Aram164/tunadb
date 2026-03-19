@@ -1207,6 +1207,10 @@ mr_measure_expr:
 				{
 					$$ = $1;
 				}
+			| mr_value_ref
+				{
+					$$ = $1;
+				}
 ;
 
 mr_nav_expr:
@@ -1257,7 +1261,7 @@ mr_agg_expr:
 ;
 
 mr_value_ref:
-			columnref
+			columnref_opt_indirection
 				{
 					// TODO: GRM5 restrict to var.col and support COUNT(var.*).
 					$$ = $1;
