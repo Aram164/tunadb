@@ -3,9 +3,34 @@
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
+
+// Look up the type of a source column by name
+LogicalType LookupSourceColumnType(const string &col_name,
+                                   const vector<string> &source_columns,
+                                   const vector<LogicalType> &source_types) {
+    for (idx_t i = 0; i < source_columns.size(); i++) {
+        if (StringUtil::CIEquals(source_columns[i], col_name)) {
+            return source_types[i];
+        }
+    }
+    throw BinderException("Column '%s' does not exist in source table", col_name);
+}
+
+// Determine the output type for a MEASURES aggregate function (sum, count etc.)
+LogicalType GetMeasureOutputType(const string &func_name, const LogicalType &input_type) {
+    if (func_name == "COUNT") {
+        return LogicalType::BIGINT;
+    } else if (func_name == "SUM" || func_name == "AVG") {
+        return LogicalType::DOUBLE;
+    } else {
+        // FIRST, LAST, MIN, MAX -> same type as input column
+        return input_type;
+    }
+}
 
 unordered_set<string> ExtractPatternVars(string pattern) {
     unordered_set<string> pattern_vars;
@@ -165,38 +190,95 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
         result.defines.emplace_back(define.variable_name, std::move(bound_expr));
     }
 
-     // create Node for exporting MEASURES
-    auto names = result.child.names;
-	auto types = result.child.types;
-	auto alias = ref.alias.empty() ? "__unnamed_match_recognize" : ref.alias;
-	
+    // bind MEASURES: each must be var.col or FUNC(var.col) AS alias
+    static const unordered_set<string> allowed_functions = {
+        "FIRST", "LAST", "COUNT", "MIN", "MAX", "SUM", "AVG"
+    };
+
+    for (auto &measure : ref.measures) {
+        if (measure.alias.empty()) {
+            throw BinderException("Every MEASURES expression must have an AS alias");
+        }
+
+        auto &expr = measure.expression;
+        string func_name;
+        string var_name;
+        string col_name;
+
+        if (expr->type == ExpressionType::COLUMN_REF) {
+            // bare var.col form
+            auto &col_ref = expr->Cast<ColumnRefExpression>();
+            if (col_ref.column_names.size() != 2) {
+                throw BinderException("MEASURES expression '%s' must be var.col or FUNC(var.col)",
+                                      expr->ToString());
+            }
+            var_name = col_ref.column_names[0];
+            col_name = col_ref.column_names[1];
+
+        } else if (expr->type == ExpressionType::FUNCTION) {
+            // FUNC(var.col) form (e.g. LAST(B.totalprice) AS bottom_price)
+            auto &func = expr->Cast<FunctionExpression>();
+            func_name = StringUtil::Upper(func.function_name);
+
+            if (!allowed_functions.count(func_name)) {
+                throw BinderException("Unknown MEASURES function '%s'. Allowed: FIRST, LAST, COUNT, MIN, MAX, SUM, AVG",
+                                      func.function_name);
+            }
+            if (func.children.size() != 1) {
+                throw BinderException("MEASURES function '%s' requires exactly one argument", func.function_name);
+            }
+            if (func.children[0]->type != ExpressionType::COLUMN_REF) {
+                throw BinderException("MEASURES function '%s' argument must be a column reference (var.col)",
+                                      func.function_name);
+            }
+
+            auto &arg = func.children[0]->Cast<ColumnRefExpression>();
+            if (arg.column_names.size() != 2) {
+                throw BinderException("MEASURES function '%s' argument must be var.col (e.g. A.price)",
+                                      func.function_name);
+            }
+            var_name = arg.column_names[0];
+            col_name = arg.column_names[1];
+
+        } else {
+            throw BinderException("MEASURES expression '%s' must be var.col or FUNC(var.col)",
+                                  expr->ToString());
+        }
+
+        // validate pattern variable
+        if (!pattern_vars.count(var_name)) {
+            throw BinderException("Unknown pattern variable '%s' in MEASURES expression '%s'",
+                                  var_name, expr->ToString());
+        }
+
+        // look up input column type from source schema
+        LogicalType input_type = LookupSourceColumnType(col_name, result.child.names, result.child.types);
+
+        // determine output type
+        LogicalType output_type = func_name.empty() ? input_type : GetMeasureOutputType(func_name, input_type);
+
+        result.measures.emplace_back(func_name, var_name, col_name,
+                                     input_type, measure.alias, output_type);
+    }
+
+    // build output schema from MEASURES columns
+    vector<string> names;
+    vector<LogicalType> types;
+    for (auto &m : result.measures) {
+        names.push_back(m.output_name);
+        types.push_back(m.output_type);
+    }
+
+    auto alias = ref.alias.empty() ? "__unnamed_match_recognize" : ref.alias;
     bind_context.AddGenericBinding(result.bind_index, alias, names, types);
-	MoveCorrelatedExpressions(*result.child_binder);
+    MoveCorrelatedExpressions(*result.child_binder);
 
-    /* 
-    BIN3: Binden von MEASURES und dazugehöriges Ausgabeschema:
-    - Funktionen FIRST, LAST, COUNT, MIN, MAX, SUM, AVG unterstützen
-    - unbekannte Funktionalität aufgerufen -> Fehler auswerfen
-    - Ausdrücke wie ,,var.col'' auflösen: 
-        - ,,var'' muss vorhandene PATTERN-Variable repräsentieren
-        - ,,col'' tatsächliche Spalte (Attribut)
-    - Zuordnung von Typen für Funktionen:
-        - z.B. COUNT -> BIGINT, SUM -> DOUBLE, AVG -> DOUBLE
-        - FIRST/LAST/MIN/MAX -> selber Typ, wie dazugehöriges Attribut (Spalte))
-    - Ausgabeschema der Query: alle MEASURES Spalten (inkl deren Namen) auflisten
-    - gebundener Knoten für MEASURES soll enthalten: 
-        - Funktionen (FIRST/LAST/..)
-        - welche dazugehörigen PATTERN-Variablen referenziert werden
-        - welchen Typ Eingabespalte hat
-        - Ausgabenamen + Ausgabetyp
-    */
-
-	BoundStatement result_statement;
+    BoundStatement result_statement;
     result_statement.names = std::move(names);
-	result_statement.types = std::move(types);
-	result_statement.plan =
-	    make_uniq<LogicalDummyScan>(result.bind_index);
-	return result_statement; 
+    result_statement.types = std::move(types);
+    result_statement.plan =
+        make_uniq<LogicalDummyScan>(result.bind_index);
+    return result_statement; 
 }
 
 } // namespace duckdb

@@ -25,6 +25,29 @@ struct BoundDefine {
 };
 	
 
+struct BoundMeasure {
+	//! Aggregate function name: FIRST, LAST, COUNT, MIN, MAX, SUM, AVG
+	string function_name;
+	//! The referenced PATTERN variable (e.g. "A", "B")
+	string pattern_variable;
+	//! The referenced source column name (e.g. "id", "price")
+	string input_column;
+	//! The type of the source column
+	LogicalType input_type;
+	//! The output column name (the AS alias)
+	string output_name;
+	//! The output type (COUNT→BIGINT, SUM/AVG→DOUBLE, FIRST/LAST/MIN/MAX→input type)
+	LogicalType output_type;
+
+	BoundMeasure() = default;
+	BoundMeasure(string function_name, string pattern_variable, string input_column,
+	             LogicalType input_type, string output_name, LogicalType output_type)
+	    : function_name(std::move(function_name)), pattern_variable(std::move(pattern_variable)),
+	      input_column(std::move(input_column)), input_type(std::move(input_type)),
+	      output_name(std::move(output_name)), output_type(std::move(output_type)) {
+	}
+};
+
 class BoundMatchRecognizeRef {
 public:
 	//! The bind index exported by the bound source relation
@@ -45,6 +68,8 @@ public:
 	bool skip_to_next_row = false;
 	//! The pattern string
 	string pattern;
+	//! The bound MEASURES entries
+	vector<BoundMeasure> measures;
 	//! The schema currently exported by the relation
 	vector<string> names;
 	vector<LogicalType> types;
