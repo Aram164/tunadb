@@ -130,9 +130,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 	result.child = result.child_binder->Bind(*ref.source);
 
     // bind rows per match, skip logic, pattern
-    result.one_row_per_match = (ref.rows_per_match == RowsPerMatchType::ONE_ROW_PER_MATCH);
-    result.skip_to_next_row = (ref.after_match_skip == AfterMatchSkipType::SKIP_TO_NEXT_ROW);
-	result.pattern = ref.pattern;
+    result.bound_mr.one_row_per_match = (ref.rows_per_match == RowsPerMatchType::ONE_ROW_PER_MATCH);
+    result.bound_mr.skip_to_next_row = (ref.after_match_skip == AfterMatchSkipType::SKIP_TO_NEXT_ROW);
+	result.bound_mr.pattern = ref.pattern;
 
     // bind PARTITION BY
     ExpressionBinder expr_binder(*result.child_binder, context);
@@ -144,7 +144,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
         } catch (const Exception &ex) {
             throw BinderException("Unknown column %s in PARTITION BY: %s", expr->ToString(), ex.what());
         }
-        result.partition_by.push_back(std::move(bound_expr));
+        result.bound_mr.partition_by.push_back(std::move(bound_expr));
     }
    
     // bind ORDER BY
@@ -155,7 +155,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
         } catch (const Exception &ex) {
             throw BinderException("Unknown column %s in ORDER BY: %s", order.expression->ToString(), ex.what());
         }
-        result.order_by.emplace_back(order.type, order.null_order, std::move(bound_expr));
+        result.bound_mr.order_by.emplace_back(order.type, order.null_order, std::move(bound_expr));
     }
 
     // extract all variables from PATTERN
@@ -187,19 +187,15 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
             throw BinderException("DEFINE condition for '%s' must return BOOLEAN, got %s", define.variable_name.c_str(), bound_expr->return_type.ToString());
         }
 
-        result.defines.emplace_back(define.variable_name, std::move(bound_expr));
+        result.bound_mr.defines.emplace_back(define.variable_name, std::move(bound_expr));
     }
 
     // bind MEASURES: each must be var.col or FUNC(var.col) AS alias
-    static const unordered_set<string> allowed_functions = {
+    const unordered_set<string> allowed_functions = {
         "FIRST", "LAST", "COUNT", "MIN", "MAX", "SUM", "AVG"
     };
 
     for (auto &measure : ref.measures) {
-        if (measure.alias.empty()) {
-            throw BinderException("Every MEASURES expression must have an AS alias");
-        }
-
         auto &expr = measure.expression;
         string func_name;
         string var_name;
@@ -257,17 +253,20 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
         // determine output type
         LogicalType output_type = func_name.empty() ? input_type : GetMeasureOutputType(func_name, input_type);
 
-        result.measures.emplace_back(func_name, var_name, col_name,
+        result.bound_mr.measures.emplace_back(func_name, var_name, col_name,
                                      input_type, measure.alias, output_type);
     }
 
     // build output schema from MEASURES columns
     vector<string> names;
     vector<LogicalType> types;
-    for (auto &m : result.measures) {
+    for (auto &m : result.bound_mr.measures) {
         names.push_back(m.output_name);
         types.push_back(m.output_type);
     }
+
+    result.bound_mr.names = names;
+    result.bound_mr.types = types;
 
     auto alias = ref.alias.empty() ? "__unnamed_match_recognize" : ref.alias;
     bind_context.AddGenericBinding(result.bind_index, alias, names, types);
