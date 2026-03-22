@@ -1058,32 +1058,103 @@ match_recognize_clause:
     {
         PGMatchRecognize *n = makeNode(PGMatchRecognize);
 
+        /*
+         * GRM6: 
+         *   $3 partition, $4 order, $5 measures, $6 rows_per_match, $7 after_match_skip,
+         *   $8 within, $9 pattern, $10 define, @11 = ')'
+         */
+
+        /* bestmöglicher Anker für Fehlermeldungen: nächste vorhandene Klausel, sonst ')' */
+        int mr_anchor_pos =
+            ($5 != NIL)   ? @5  :   /* MEASURES */
+            ($6 != -1)    ? @6  :   /* ROWS PER MATCH */
+            ($7 != -1)    ? @7  :   /* AFTER MATCH SKIP */
+            ($9 != NULL)  ? @9  :   /* PATTERN */
+            ($10 != NIL)  ? @10 :   /* DEFINE */
+                           @11;     /* ')' */
+
+        if ($4 == NIL)
+        {
+            ereport(ERROR,
+                    (errcode(PG_ERRCODE_SYNTAX_ERROR),
+                     errmsg("MATCH RECOGNIZE: missing ORDER BY clause"),
+                     parser_errposition(mr_anchor_pos)));
+        }
+
+        if ($5 == NIL)
+        {
+            ereport(ERROR,
+                    (errcode(PG_ERRCODE_SYNTAX_ERROR),
+                     errmsg("MATCH RECOGNIZE: missing MEASURES clause"),
+                     parser_errposition(mr_anchor_pos)));
+        }
+
+        if ($7 == -1)
+        {
+            int pos = ($9 != NULL) ? @9 : mr_anchor_pos; /* ideal: PATTERN, sonst nächster Anker */
+            ereport(ERROR,
+                    (errcode(PG_ERRCODE_SYNTAX_ERROR),
+                     errmsg("MATCH RECOGNIZE: missing AFTER MATCH SKIP clause"),
+                     parser_errposition(pos)));
+        }
+
+        if ($9 == NULL)
+        {
+            int pos = ($10 != NIL) ? @10 : @11; /* DEFINE falls vorhanden, sonst ')' */
+            ereport(ERROR,
+                    (errcode(PG_ERRCODE_SYNTAX_ERROR),
+                     errmsg("MATCH RECOGNIZE: missing PATTERN clause"),
+                     parser_errposition(pos)));
+        }
+
+        if ($10 == NIL)
+        {
+            ereport(ERROR,
+                    (errcode(PG_ERRCODE_SYNTAX_ERROR),
+                     errmsg("MATCH RECOGNIZE: missing DEFINE clause"),
+                     parser_errposition(@11)));
+        }
+
+        
         n->partition = (PGList *) $3;
         n->order = (PGList *) $4;
         n->measures = (PGList *) $5;
-        n->one_row_per_match = (bool) $6;
-        n->skip_to_next_row = (bool) $7;
-		n->skip_past_last_row = (bool) !$7;
 
-		/* TODO: GRM4, GRM5, TW1 */
+        /* rows per match: 1=ONE, 0=ALL, -1=DEFAULT (wir setzen Default=ONE) */
+        {
+            int rpm = $6;
+            n->one_row_per_match = (rpm == -1) ? true : (rpm != 0);
+        }
+
+        /* after match skip: 1=TO NEXT ROW, 0=PAST LAST ROW (Pflicht, -1 wurde oben abgefangen) */
+        {
+            int skip = $7;
+            n->skip_to_next_row = (skip == 1);
+            n->skip_past_last_row = (skip == 0);
+        }
+
+        /* TODO: GRM5, TW1 */
         n->within = nullptr;
-        n->pattern = nullptr;
-        n->define = nullptr;
+
+        n->pattern = $9;
+        n->define = (PGList *) $10;
 
         $$ = (PGNode *) n;
     }
 ;
 
+
 mr_opt_partition_clause:
-			opt_partition_clause {$$ = $1}	/* use the built-in partition clause */
+			opt_partition_clause {$$ = $1;}	/* use the built-in partition clause */
 ;
 
 mr_order_clause:
-			ORDER BY mr_sortby			
-				{
-					$$ = list_make1($3);	/* exactly one expression allowed */
-				}
+      ORDER BY mr_sortby
+        { $$ = list_make1($3); }
+    | /* EMPTY */
+        { $$ = NIL; }
 ;
+
 
 mr_sortby:	
 			a_expr
@@ -1098,40 +1169,119 @@ mr_sortby:
 		;
 
 mr_measures_clause:
-			MEASURES mr_measure_list
+      MEASURES mr_measure_list
+        { $$ = $2; }
+    | /* EMPTY */
+        { $$ = NIL; }
+;
+
+
+mr_measure_list:
+			mr_measure
 				{
-					$$ = $2;		
+					$$ = list_make1($1);
+				}
+			| mr_measure_list ',' mr_measure
+				{
+					$$ = lappend($1, $3);
 				}
 ;
 
-/* change here for GRM5 */
-mr_measure_list:
+mr_measure:
+			mr_measure_expr AS ColLabelOrString
 				{
-					$$ = nullptr;
+					PGResTarget *res = makeNode(PGResTarget);
+					res->name = $3;
+					res->indirection = NIL;
+					res->val = $1;
+					res->location = @1;
+					$$ = (PGNode *) res;
+				}
+;
+
+mr_measure_expr:
+			mr_nav_expr
+				{
+					$$ = $1;
+				}
+			| mr_agg_expr
+				{
+					$$ = $1;
+				}
+;
+
+mr_nav_expr:
+			FIRST_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("first"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| LAST_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("last"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+;
+
+mr_agg_expr:
+			MIN_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("min"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| MAX_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("max"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| SUM_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("sum"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| AVG_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("avg"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| COUNT_P '(' '*' ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), NIL, @1);
+					n->agg_star = true;
+					$$ = (PGNode *) n;
+				}
+			| COUNT_P '(' mr_value_ref ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+;
+
+mr_value_ref:
+			columnref
+				{
+					$$ = $1;
 				}
 ;
 
 mr_rows_per_match_clause:
-			ONE ROW PER MATCH
-				{
-					$$ = true;
-				}
-			| ALL ROWS PER MATCH
-				{
-					$$ = false;
-				}
+      ONE ROW PER MATCH      { $$ = 1; }
+    | ALL ROWS PER MATCH     { $$ = 0; }
+    | /* EMPTY */            { $$ = -1; }  /* default */
 ;
 
+
 mr_after_match_skip_clause:
-			AFTER MATCH SKIP mr_skip_option
-				{
-					$$ = $2;
-				}
+      AFTER MATCH SKIP mr_skip_option
+        { $$ = $4; }
+    | /* EMPTY */
+        { $$ = -1; }
 ;
 
 mr_skip_option:
-			TO NEXT ROW { $$ = true }
-			| PAST LAST_P ROW { $$ = false }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp
+      TO NEXT ROW            { $$ = 1; }
+    | PAST LAST_P ROW         { $$ = 0; }
+;
 
 
 /* change here for TW1 */
@@ -1147,32 +1297,43 @@ mr_opt_within_clause:
 ;
 
 mr_pattern_clause:
-			PATTERN '(' mr_regex ')'
-				{
-					$$ = $3;
-				}
+      PATTERN '(' Sconst ')'
+        { $$ = $3; }
+    | /* EMPTY */
+        { $$ = NULL; }
 ;
 
-/* change here for GRM4 */
-mr_regex:							
-				{
-					$$ = nullptr;
-				}
-;
-
-/* change here for GRM5 */
 mr_define_clause:
-			DEFINE  target_list		
-				{
-					$$ = $2;
-				}
+      DEFINE mr_define_list
+        { $$ = $2; }
+    | /* EMPTY */
+        { $$ = NIL; }
 ;
+
 
 mr_define_list:
-				{
-					$$ = nullptr;
-				}
+        mr_define_item
+        {
+            $$ = list_make1($1);
+        }
+    |   mr_define_list ',' mr_define_item
+        {
+            $$ = lappend($1, $3);
+        }
 ;
+
+/* A AS <boolean-expr> */
+mr_define_item:
+        ColId AS a_expr
+        {
+            PGResTarget *t = makeNode(PGResTarget);
+            t->name = $1;
+            t->val  = $3;
+            t->location = @1;
+            $$ = (PGNode *) t;
+        }
+;
+
 
 /*****************************************************************************
  *
@@ -1323,8 +1484,8 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 			| table_ref match_recognize_clause
 				{ 
 					PGMatchRecognize *mr = (PGMatchRecognize *) $2;
-        			mr->table_ref = $1;
-					$$ = $1;
+	        			mr->source = $1;
+					$$ = $2;
 				}
 		;
 

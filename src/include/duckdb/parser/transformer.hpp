@@ -324,6 +324,8 @@ private:
 	unique_ptr<TableRef> TransformJoin(duckdb_libpgquery::PGJoinExpr &root);
 	//! Transform a Postgres pivot node into a TableRef
 	unique_ptr<TableRef> TransformPivot(duckdb_libpgquery::PGPivotExpr &root);
+	//! Transform a Postgres MATCH_RECOGNIZE node into a TableRef
+	unique_ptr<TableRef> TransformMatchRecognize(duckdb_libpgquery::PGMatchRecognize &root);
 	//! Transform a table producing subquery into a TableRef
 	unique_ptr<TableRef> TransformRangeSubselect(duckdb_libpgquery::PGRangeSubselect &root);
 	//! Transform a VALUES list into a set of expressions
