@@ -250,57 +250,37 @@
     "base": "TableRef",
     "enum": "MATCH_RECOGNIZE",
     "members": [
-      {
-        "id": 200,
+      { "id": 200, 
         "name": "source",
-        "type": "TableRef*"
+        "type": "TableRef*" 
       },
-      {
-        "id": 201,
-        "name": "partition_by",
-        "type": "vector<ParsedExpression*>"
+      { "id": 201, 
+        "name": "partition_by", 
+        "type": "vector<ParsedExpression*>" 
       },
-      {
-        "id": 202,
-        "name": "order_by",
-        "type": "vector<OrderByNode>"
+      { "id": 202, 
+        "name": "order_by", 
+        "type": "vector<OrderByNode>" 
       },
-      {
-        "id": 203,
-        "name": "measures",
-        "type": "vector<ParsedExpression*>"
+      { "id": 203, 
+        "name": "measures", 
+        "type": "vector<MeasureDefinition>" 
       },
-      {
-        "id": 204,
-        "name": "one_row_per_match",
-        "type": "bool",
-        "default": "true"
+      { "id": 204, 
+        "name": "rows_per_match", 
+        "type": "RowsPerMatchType" 
       },
-      {
-        "id": 205,
-        "name": "skip_to_next_row",
-        "type": "bool"
+      { "id": 205, 
+        "name": "after_match_skip", 
+        "type": "AfterMatchSkipType" 
       },
-      {
-        "id": 206,
-        "name": "skip_past_last_row",
-        "type": "bool",
-        "default": "true"
+      { "id": 206, 
+        "name": "pattern", 
+        "type": "string" 
       },
-      {
-        "id": 207,
-        "name": "within",
-        "type": "ParsedExpression*"
-      },
-      {
-        "id": 208,
-        "name": "pattern",
-        "type": "string"
-      },
-      {
-        "id": 209,
-        "name": "definitions",
-        "type": "vector<ParsedExpression*>"
+      { "id": 207, 
+        "name": "define", 
+        "type": "vector<DefineDefinition>" 
       }
     ]
   },

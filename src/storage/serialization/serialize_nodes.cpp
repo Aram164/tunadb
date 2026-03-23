@@ -18,6 +18,7 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
+#include "duckdb/planner/tableref/bound_match_recognize_ref.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -97,6 +98,18 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void BoundDefine::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(200, "variable_name", variable_name);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
+}
+
+BoundDefine BoundDefine::Deserialize(Deserializer &deserializer) {
+	auto variable_name = deserializer.ReadPropertyWithDefault<string>(200, "variable_name");
+	auto condition = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition");
+	BoundDefine result(std::move(variable_name), std::move(condition));
+	return result;
+}
+
 void BoundLimitNode::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LimitNodeType>(100, "type", type);
 	serializer.WritePropertyWithDefault<idx_t>(101, "constant_integer", constant_integer);
@@ -110,6 +123,52 @@ BoundLimitNode BoundLimitNode::Deserialize(Deserializer &deserializer) {
 	auto constant_percentage = deserializer.ReadProperty<double>(102, "constant_percentage");
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(103, "expression");
 	BoundLimitNode result(type, constant_integer, constant_percentage, std::move(expression));
+	return result;
+}
+
+void BoundMatchRecognizeInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "partition_by", partition_by);
+	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(201, "order_by", order_by);
+	serializer.WritePropertyWithDefault<vector<BoundDefine>>(202, "defines", defines);
+	serializer.WritePropertyWithDefault<bool>(203, "one_row_per_match", one_row_per_match);
+	serializer.WritePropertyWithDefault<bool>(204, "skip_to_next_row", skip_to_next_row);
+	serializer.WritePropertyWithDefault<string>(205, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<BoundMeasure>>(206, "measures", measures);
+	serializer.WritePropertyWithDefault<vector<string>>(207, "names", names);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "types", types);
+}
+
+BoundMatchRecognizeInfo BoundMatchRecognizeInfo::Deserialize(Deserializer &deserializer) {
+	BoundMatchRecognizeInfo result;
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(200, "partition_by", result.partition_by);
+	deserializer.ReadPropertyWithDefault<vector<BoundOrderByNode>>(201, "order_by", result.order_by);
+	deserializer.ReadPropertyWithDefault<vector<BoundDefine>>(202, "defines", result.defines);
+	deserializer.ReadPropertyWithDefault<bool>(203, "one_row_per_match", result.one_row_per_match);
+	deserializer.ReadPropertyWithDefault<bool>(204, "skip_to_next_row", result.skip_to_next_row);
+	deserializer.ReadPropertyWithDefault<string>(205, "pattern", result.pattern);
+	deserializer.ReadPropertyWithDefault<vector<BoundMeasure>>(206, "measures", result.measures);
+	deserializer.ReadPropertyWithDefault<vector<string>>(207, "names", result.names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "types", result.types);
+	return result;
+}
+
+void BoundMeasure::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
+	serializer.WritePropertyWithDefault<string>(201, "pattern_variable", pattern_variable);
+	serializer.WritePropertyWithDefault<string>(202, "input_column", input_column);
+	serializer.WriteProperty<LogicalType>(203, "input_type", input_type);
+	serializer.WritePropertyWithDefault<string>(204, "output_name", output_name);
+	serializer.WriteProperty<LogicalType>(205, "output_type", output_type);
+}
+
+BoundMeasure BoundMeasure::Deserialize(Deserializer &deserializer) {
+	auto function_name = deserializer.ReadPropertyWithDefault<string>(200, "function_name");
+	auto pattern_variable = deserializer.ReadPropertyWithDefault<string>(201, "pattern_variable");
+	auto input_column = deserializer.ReadPropertyWithDefault<string>(202, "input_column");
+	auto input_type = deserializer.ReadProperty<LogicalType>(203, "input_type");
+	auto output_name = deserializer.ReadPropertyWithDefault<string>(204, "output_name");
+	auto output_type = deserializer.ReadProperty<LogicalType>(205, "output_type");
+	BoundMeasure result(std::move(function_name), std::move(pattern_variable), std::move(input_column), std::move(input_type), std::move(output_name), std::move(output_type));
 	return result;
 }
 

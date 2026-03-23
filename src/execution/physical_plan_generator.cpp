@@ -93,7 +93,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalTopN>());
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return CreatePlan(op.Cast<LogicalCopyToFile>());
-	// TODO: PHY1 create PhysicalMatchRecognize plan for LogicalMatchRecognize.
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		return CreatePlan(op.Cast<LogicalDummyScan>());
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -169,6 +168,16 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalReset>());
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return CreatePlan(op.Cast<LogicalPivot>());
+	// TODO: PHY1 create PhysicalMatchRecognize plan for LogicalMatchRecognize.
+	case LogicalOperatorType::LOGICAL_MATCH_RECOGNIZE: {
+		// Allow EXPLAIN (OPTIMIZED_ONLY) to work by planning the child.
+		auto &cfg = ClientConfig::GetConfig(context);
+		if (cfg.explain_output_type == ExplainOutputType::OPTIMIZED_ONLY) {
+			D_ASSERT(!op.children.empty());
+			return CreatePlan(*op.children[0]);
+		}
+		throw NotImplementedException("MATCH_RECOGNIZE physical planning not implemented");
+	}
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:

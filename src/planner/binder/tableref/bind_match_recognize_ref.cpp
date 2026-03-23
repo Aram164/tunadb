@@ -4,7 +4,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_match_recognize.hpp"
 
 namespace duckdb {
 
@@ -275,9 +275,12 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
     BoundStatement result_statement;
     result_statement.names = std::move(names);
     result_statement.types = std::move(types);
-    result_statement.plan =
-        make_uniq<LogicalDummyScan>(result.bind_index);
-    return result_statement; 
+
+    auto logical_mr = make_uniq<LogicalMatchRecognize>(result.bind_index, std::move(result.bound_mr));
+    logical_mr->children.push_back(std::move(result.child.plan));
+    result_statement.plan = std::move(logical_mr);
+
+    return result_statement;
 }
 
 } // namespace duckdb

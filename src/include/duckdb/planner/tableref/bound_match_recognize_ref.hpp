@@ -22,11 +22,28 @@ struct BoundDefine {
 	BoundDefine(string variable_name, unique_ptr<Expression> condition)
 		: variable_name(std::move(variable_name)), condition(std::move(condition)) {
 	}
+
+	// Deep-copy constructor: BoundDefine owns a unique_ptr<Expression>, so we must clone the expression tree to avoid copying unique_ptrs.
+	BoundDefine(const BoundDefine &other)
+	    : variable_name(other.variable_name),
+	      condition(other.condition ? other.condition->Copy() : nullptr) {
+	}
+
+	// Deep-copy assignment: same reason as above; replace current owned expression with a clone.
+	BoundDefine &operator=(const BoundDefine &other) {
+		if (this == &other) return *this;
+		variable_name = other.variable_name;
+		condition = other.condition ? other.condition->Copy() : nullptr;
+		return *this;
+	}
+
 	BoundDefine Copy() const {
 		return BoundDefine(variable_name, condition ? condition->Copy() : nullptr);
 	}
+	void Serialize(Serializer &serializer) const;
+	static BoundDefine Deserialize(Deserializer &deserializer);
 };
-	
+
 struct BoundMeasure {
 	//! Aggregate function name: FIRST, LAST, COUNT, MIN, MAX, SUM, AVG
 	string function_name;
@@ -48,9 +65,16 @@ struct BoundMeasure {
 	      input_column(std::move(input_column)), input_type(std::move(input_type)),
 	      output_name(std::move(output_name)), output_type(std::move(output_type)) {
 	}
+
+	// default copy is fine
+	BoundMeasure(const BoundMeasure &) = default;
+	BoundMeasure &operator=(const BoundMeasure &) = default;
+
 	BoundMeasure Copy() const {
 		return *this;
 	}
+	void Serialize(Serializer &serializer) const;
+	static BoundMeasure Deserialize(Deserializer &deserializer);
 };
 
 struct BoundMatchRecognizeInfo {
@@ -71,6 +95,53 @@ struct BoundMatchRecognizeInfo {
 	//! The schema currently exported by the relation
 	vector<string> names;
 	vector<LogicalType> types;
+
+	BoundMatchRecognizeInfo() = default;
+
+	// Deep-copy constructor: required because this struct owns unique_ptr<Expression>.
+	// We clone the expression trees so each instance has independent ownership.
+	BoundMatchRecognizeInfo(const BoundMatchRecognizeInfo &other) {
+		for (auto &p : other.partition_by) {
+			partition_by.push_back(p ? p->Copy() : nullptr);
+		}
+		for (auto &o : other.order_by) {
+			order_by.push_back(o.Copy());
+		}
+		for (auto &d : other.defines) {
+			defines.push_back(d);
+		}
+		measures = other.measures;
+		one_row_per_match = other.one_row_per_match;
+		skip_to_next_row = other.skip_to_next_row;
+		pattern = other.pattern;
+		names = other.names;
+		types = other.types;
+	}
+
+	// Deep-copy assignment: same reason as above; replaces owned data with cloned copies to avoid sharing or copying unique_ptrs.
+	BoundMatchRecognizeInfo &operator=(const BoundMatchRecognizeInfo &other) {
+		if (this == &other) return *this;
+		partition_by.clear();
+		order_by.clear();
+		defines.clear();
+
+		for (auto &p : other.partition_by) {
+			partition_by.push_back(p ? p->Copy() : nullptr);
+		}
+		for (auto &o : other.order_by) {
+			order_by.push_back(o.Copy());
+		}
+		for (auto &d : other.defines) {
+			defines.push_back(d);
+		}
+		measures = other.measures;
+		one_row_per_match = other.one_row_per_match;
+		skip_to_next_row = other.skip_to_next_row;
+		pattern = other.pattern;
+		names = other.names;
+		types = other.types;
+		return *this;
+	}
 
 	BoundMatchRecognizeInfo Copy() const {
 		BoundMatchRecognizeInfo copy;

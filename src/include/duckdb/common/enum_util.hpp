@@ -40,6 +40,8 @@ enum class ARTScanHandling : uint8_t;
 
 enum class AccessMode : uint8_t;
 
+enum class AfterMatchSkipType : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateDistinctDependent : uint8_t;
@@ -350,6 +352,8 @@ enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
+enum class RowsPerMatchType : uint8_t;
+
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
@@ -486,6 +490,9 @@ const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
+
+template<>
+const char* EnumUtil::ToChars<AfterMatchSkipType>(AfterMatchSkipType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
@@ -953,6 +960,9 @@ template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
+const char* EnumUtil::ToChars<RowsPerMatchType>(RowsPerMatchType value);
+
+template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
@@ -1150,6 +1160,9 @@ ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
+
+template<>
+AfterMatchSkipType EnumUtil::FromString<AfterMatchSkipType>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
@@ -1615,6 +1628,9 @@ RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+RowsPerMatchType EnumUtil::FromString<RowsPerMatchType>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);

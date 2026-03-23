@@ -246,29 +246,4 @@ unique_ptr<TableRef> MatchRecognizeRef::Copy() {
 	return std::move(copy);
 }
 
-void MatchRecognizeRef::Serialize(Serializer &serializer) const {
-	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "partition_by", partition_by);
-	serializer.WritePropertyWithDefault<vector<OrderByNode>>(202, "order_by", order_by);
-	serializer.WritePropertyWithDefault<vector<MeasureDefinition>>(203, "measures", measures);
-	serializer.WriteProperty(204, "rows_per_match", (uint8_t)rows_per_match);
-	serializer.WriteProperty(205, "after_match_skip", (uint8_t)after_match_skip);
-	serializer.WritePropertyWithDefault<string>(206, "pattern", pattern);
-	serializer.WritePropertyWithDefault<vector<DefineDefinition>>(207, "define", define);
-}
-
-unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<MatchRecognizeRef>(new MatchRecognizeRef());
-	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "source", result->source);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "partition_by", result->partition_by);
-	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(202, "order_by", result->order_by);
-	deserializer.ReadPropertyWithDefault<vector<MeasureDefinition>>(203, "measures", result->measures);
-	result->rows_per_match = (RowsPerMatchType)deserializer.ReadProperty<uint8_t>(204, "rows_per_match");
-	result->after_match_skip = (AfterMatchSkipType)deserializer.ReadProperty<uint8_t>(205, "after_match_skip");
-	deserializer.ReadPropertyWithDefault<string>(206, "pattern", result->pattern);
-	deserializer.ReadPropertyWithDefault<vector<DefineDefinition>>(207, "define", result->define);
-	return std::move(result);
-}
-
 } // namespace duckdb

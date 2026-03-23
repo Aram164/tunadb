@@ -1060,6 +1060,22 @@
     ]
   },
   {
+    "class": "LogicalMatchRecognize",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_MATCH_RECOGNIZE",
+    "members": [
+      { "id": 200, 
+        "name": "bind_index", 
+        "type": "idx_t" 
+      },
+      { "id": 201, 
+        "name": "bound_mr", 
+        "type": "BoundMatchRecognizeInfo" 
+      }
+    ],
+    "constructor": ["bind_index", "bound_mr"]
+  },
+  {
     "class": "LogicalGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_GET",

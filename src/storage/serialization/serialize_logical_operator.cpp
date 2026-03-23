@@ -133,6 +133,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_LOAD:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_MATCH_RECOGNIZE:
+		result = LogicalMatchRecognize::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		result = LogicalMaterializedCTE::Deserialize(deserializer);
 		break;
@@ -586,6 +589,19 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer
 	auto limit_val = deserializer.ReadProperty<BoundLimitNode>(200, "limit_val");
 	auto offset_val = deserializer.ReadProperty<BoundLimitNode>(201, "offset_val");
 	auto result = duckdb::unique_ptr<LogicalLimit>(new LogicalLimit(std::move(limit_val), std::move(offset_val)));
+	return std::move(result);
+}
+
+void LogicalMatchRecognize::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<idx_t>(200, "bind_index", bind_index);
+	serializer.WriteProperty<BoundMatchRecognizeInfo>(201, "bound_mr", bound_mr);
+}
+
+unique_ptr<LogicalOperator> LogicalMatchRecognize::Deserialize(Deserializer &deserializer) {
+	auto bind_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "bind_index");
+	auto bound_mr = deserializer.ReadProperty<BoundMatchRecognizeInfo>(201, "bound_mr");
+	auto result = duckdb::unique_ptr<LogicalMatchRecognize>(new LogicalMatchRecognize(bind_index, bound_mr));
 	return std::move(result);
 }
 
