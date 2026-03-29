@@ -31,6 +31,7 @@
 #include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_pivot.hpp"
+#include "duckdb/planner/operator/logical_match_recognize.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_pragma.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"

@@ -53,7 +53,7 @@ select_with_parens:
 			| '(' select_with_parens ')'			{ $$ = $2; }
 			| '(' VariableShowStmt ')'
 		    {
-		    	$$ = $2;
+			$$ = $2;
 			}
 		;
 
@@ -1055,72 +1055,62 @@ match_recognize_clause:
         mr_pattern_clause
         mr_define_clause
     ')'
-    {
+	{
         PGMatchRecognize *n = makeNode(PGMatchRecognize);
 
-        /*
-         * GRM6: 
+		/*
+         * GRM6:
          *   $3 partition, $4 order, $5 measures, $6 rows_per_match, $7 after_match_skip,
          *   $8 within, $9 pattern, $10 define, @11 = ')'
          */
 
-        /* bestmöglicher Anker für Fehlermeldungen: nächste vorhandene Klausel, sonst ')' */
+        /* bestmoeglicher Anker für Fehlermeldungen: naechste vorhandene Klausel, sonst ')' */
         int mr_anchor_pos =
             ($5 != NIL)   ? @5  :   /* MEASURES */
             ($6 != -1)    ? @6  :   /* ROWS PER MATCH */
             ($7 != -1)    ? @7  :   /* AFTER MATCH SKIP */
             ($9 != NULL)  ? @9  :   /* PATTERN */
             ($10 != NIL)  ? @10 :   /* DEFINE */
-                           @11;     /* ')' */
+                            @11;    /* ')' */
 
-        if ($4 == NIL)
-        {
+        if ($4 == NIL) {
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing ORDER BY clause"),
                      parser_errposition(mr_anchor_pos)));
-        }
-
-        if ($5 == NIL)
-        {
+	}
+        if ($5 == NIL) {
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing MEASURES clause"),
                      parser_errposition(mr_anchor_pos)));
         }
-
-        if ($7 == -1)
-        {
-            int pos = ($9 != NULL) ? @9 : mr_anchor_pos; /* ideal: PATTERN, sonst nächster Anker */
+        if ($7 == -1) {
+            int pos = ($8 != NULL) ? @8 : mr_anchor_pos; /* within falls vorhanden, sonst nächster Anker */
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing AFTER MATCH SKIP clause"),
                      parser_errposition(pos)));
         }
-
-        if ($9 == NULL)
-        {
+        if ($9 == NULL) {
             int pos = ($10 != NIL) ? @10 : @11; /* DEFINE falls vorhanden, sonst ')' */
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing PATTERN clause"),
                      parser_errposition(pos)));
         }
-
-        if ($10 == NIL)
-        {
+        if ($10 == NIL) {
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing DEFINE clause"),
                      parser_errposition(@11)));
         }
 
-        
         n->partition = (PGList *) $3;
         n->order = (PGList *) $4;
         n->measures = (PGList *) $5;
 
-        /* rows per match: 1=ONE, 0=ALL, -1=DEFAULT (wir setzen Default=ONE) */
+		/* rows per match: 1=ONE, 0=ALL, -1=DEFAULT (wir setzen Default=ONE) */
         {
             int rpm = $6;
             n->one_row_per_match = (rpm == -1) ? true : (rpm != 0);
@@ -1133,14 +1123,15 @@ match_recognize_clause:
             n->skip_past_last_row = (skip == 0);
         }
 
-        /* TODO: GRM5, TW1 */
+        // TODO: GRM5/TW1 parse and store WITHIN + structured MEASURES/DEFINE data.
+
         n->within = nullptr;
 
         n->pattern = $9;
         n->define = (PGList *) $10;
 
         $$ = (PGNode *) n;
-    }
+	}
 ;
 
 
@@ -1149,14 +1140,18 @@ mr_opt_partition_clause:
 ;
 
 mr_order_clause:
-      ORDER BY mr_sortby
-        { $$ = list_make1($3); }
-    | /* EMPTY */
-        { $$ = NIL; }
+			ORDER BY mr_sortby
+				{
+					$$ = list_make1($3);	/* exactly one expression allowed */
+				}
+			| /* EMPTY */
+				{
+					$$ = NIL;
+				}
 ;
 
 
-mr_sortby:	
+mr_sortby:
 			a_expr
 				{
 					$$ = makeNode(PGSortBy);
@@ -1169,10 +1164,14 @@ mr_sortby:
 		;
 
 mr_measures_clause:
-      MEASURES mr_measure_list
-        { $$ = $2; }
-    | /* EMPTY */
-        { $$ = NIL; }
+			MEASURES mr_measure_list
+				{
+					$$ = $2;
+				}
+			| /* EMPTY */
+		{
+					$$ = NIL;
+				}
 ;
 
 
@@ -1205,6 +1204,10 @@ mr_measure_expr:
 					$$ = $1;
 				}
 			| mr_agg_expr
+				{
+					$$ = $1;
+				}
+			| mr_value_ref
 				{
 					$$ = $1;
 				}
@@ -1258,36 +1261,34 @@ mr_agg_expr:
 ;
 
 mr_value_ref:
-			columnref
+			columnref_opt_indirection
 				{
+					// TODO: GRM5 restrict to var.col and support COUNT(var.*).
 					$$ = $1;
 				}
 ;
 
 mr_rows_per_match_clause:
-      ONE ROW PER MATCH      { $$ = 1; }
-    | ALL ROWS PER MATCH     { $$ = 0; }
-    | /* EMPTY */            { $$ = -1; }  /* default */
+			ONE ROW PER MATCH      { $$ = 1; }
+			| ALL ROWS PER MATCH   { $$ = 0; }
+			| /* EMPTY */          { $$ = -1; }  /* default */
 ;
 
-
 mr_after_match_skip_clause:
-      AFTER MATCH SKIP mr_skip_option
-        { $$ = $4; }
-    | /* EMPTY */
-        { $$ = -1; }
+			AFTER MATCH SKIP mr_skip_option 	{ $$ = $4; }
+		| /* EMPTY */ 						{ $$ = -1; }
 ;
 
 mr_skip_option:
-      TO NEXT ROW            { $$ = 1; }
-    | PAST LAST_P ROW         { $$ = 0; }
+			TO NEXT ROW 		{ $$ = 1; }
+			| PAST LAST_P ROW 	{ $$ = 0; }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp */
 ;
 
-
 /* change here for TW1 */
-mr_opt_within_clause:				
+mr_opt_within_clause:
 			WITHIN
 				{
+					// TODO: TW1 parse WITHIN time window expression.
 					$$ = nullptr;
 				}
 			| /* EMPTY */
@@ -1297,17 +1298,25 @@ mr_opt_within_clause:
 ;
 
 mr_pattern_clause:
-      PATTERN '(' Sconst ')'
-        { $$ = $3; }
-    | /* EMPTY */
-        { $$ = NULL; }
+			PATTERN '(' Sconst ')'
+				{
+					$$ = $3;
+				}
+			| /* EMPTY */
+				{
+					$$ = NULL;
+				}
 ;
 
 mr_define_clause:
-      DEFINE mr_define_list
-        { $$ = $2; }
-    | /* EMPTY */
-        { $$ = NIL; }
+        DEFINE mr_define_list
+        {
+            $$ = $2;
+        }
+		| /* EMPTY */
+	{
+				$$ = NIL;
+			}
 ;
 
 
@@ -1482,10 +1491,10 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 					$$ = (PGNode *) n;
 				}
 			| table_ref match_recognize_clause
-				{ 
+				{
 					PGMatchRecognize *mr = (PGMatchRecognize *) $2;
-	        			mr->source = $1;
-					$$ = $2;
+			mr->source = $1;
+					$$ = (PGNode *) mr;
 				}
 		;
 
@@ -2041,7 +2050,7 @@ Typename:	SimpleTypename opt_array_bounds
 				   $$->location = @1;
                }
             | MAP '(' type_list ')' opt_array_bounds
-            	{
+	{
 				   $$ = SystemTypeName("map");
 				   $$->arrayBounds = $5;
 				   $$->typmods = $3;
@@ -4181,12 +4190,12 @@ indirection_el:
 					$$ = (PGNode *) ai;
 				}
 			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
-				    	PGAIndices *ai = makeNode(PGAIndices);
-				    	ai->is_slice = true;
-				    	ai->lidx = $2;
-				    	ai->uidx = $4;
-				    	ai->step = $6;
-				    	$$ = (PGNode *) ai;
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->uidx = $4;
+					ai->step = $6;
+					$$ = (PGNode *) ai;
 				}
 			| '[' opt_slice_bound SINGLE_COLON '-' SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);
@@ -4240,14 +4249,14 @@ extended_indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
-		    	| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
+			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
 					ai->lidx = $2;
 					ai->uidx = $4;
 					ai->step = $6;
-                 			$$ = (PGNode *) ai;
-                		}
+			$$ = (PGNode *) ai;
+		}
 
 			| '[' opt_slice_bound SINGLE_COLON '-' SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);

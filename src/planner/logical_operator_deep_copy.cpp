@@ -56,6 +56,13 @@ struct TableIndexAccessor<LogicalPivot> {
 };
 
 template <>
+struct TableIndexAccessor<LogicalMatchRecognize> {
+   static idx_t &Get(LogicalMatchRecognize &plan) {
+       return plan.bind_index;
+   }
+};
+
+template <>
 struct TableIndexAccessor<LogicalJoin> {
 	static idx_t &Get(LogicalJoin &plan) {
 		return plan.mark_index;
@@ -105,6 +112,10 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PIVOT: {
 		ReplaceTableIndex<LogicalPivot>(op);
 		break;
+	}
+	case LogicalOperatorType::LOGICAL_MATCH_RECOGNIZE: {
+		ReplaceTableIndex<LogicalMatchRecognize>(op);
+	break;
 	}
 
 	// -----------------------------

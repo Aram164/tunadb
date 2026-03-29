@@ -389,6 +389,103 @@
     "pointer_type": "none"
   },
   {
+  "class": "BoundDefine",
+  "pointer_type": "none",
+  "includes": [
+    "duckdb/planner/tableref/bound_match_recognize_ref.hpp"
+  ],
+  "members": [
+    { "id": 200,
+      "name": "variable_name",
+      "type": "string"
+    },
+    { "id": 201,
+      "name": "condition",
+      "type": "Expression*"
+    }
+  ],
+  "constructor": ["variable_name", "condition"]
+  },
+  {
+  "class": "BoundMeasure",
+  "pointer_type": "none",
+  "includes": [
+    "duckdb/planner/tableref/bound_match_recognize_ref.hpp"
+  ],
+  "members": [
+    { "id": 200,
+      "name": "function_name",
+      "type": "string"
+    },
+    { "id": 201,
+      "name": "pattern_variable",
+      "type": "string"
+    },
+    { "id": 202,
+      "name": "input_column",
+      "type": "string"
+    },
+    { "id": 203,
+      "name": "input_type",
+      "type": "LogicalType"
+    },
+    { "id": 204,
+      "name": "output_name",
+      "type": "string"
+    },
+    { "id": 205,
+      "name": "output_type",
+      "type": "LogicalType"
+    }
+  ],
+  "constructor": ["function_name", "pattern_variable", "input_column", "input_type", "output_name", "output_type"]
+  },
+  {
+  "class": "BoundMatchRecognizeInfo",
+  "pointer_type": "none",
+  "includes": [
+    "duckdb/planner/tableref/bound_match_recognize_ref.hpp"
+  ],
+  "members": [
+    { "id": 200,
+      "name": "partition_by",
+      "type": "vector<Expression*>"
+    },
+    { "id": 201,
+      "name": "order_by",
+      "type": "vector<BoundOrderByNode>"
+    },
+    { "id": 202,
+      "name": "defines",
+      "type": "vector<BoundDefine>"
+    },
+    { "id": 203,
+      "name": "one_row_per_match",
+      "type": "bool"
+    },
+    { "id": 204,
+      "name": "skip_to_next_row",
+      "type": "bool"
+    },
+    { "id": 205,
+      "name": "pattern",
+      "type": "string"
+    },
+    { "id": 206,
+      "name": "measures",
+      "type": "vector<BoundMeasure>"
+    },
+    { "id": 207,
+      "name": "names",
+      "type": "vector<string>"
+    },
+    { "id": 208,
+      "name": "types",
+      "type": "vector<LogicalType>"
+    }
+  ]
+  },
+  {
     "class": "ColumnDefinition",
     "includes": [
       "duckdb/parser/column_definition.hpp"

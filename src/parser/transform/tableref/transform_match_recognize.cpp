@@ -4,15 +4,27 @@
 
 namespace duckdb {
 
+//! Transforms a PGMatchRecognize parse node into a MatchRecognizeRef AST node.
+//! Handles all MATCH_RECOGNIZE subclauses: source, PARTITION BY, ORDER BY,
+//! MEASURES, DEFINE, PATTERN, ROWS PER MATCH, and AFTER MATCH SKIP.
 unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGMatchRecognize &root) {
 	auto result = make_uniq<MatchRecognizeRef>();
-	result->source = TransformTableRefNode(*root.source);
 
+	// Transform the source table reference (the table MATCH_RECOGNIZE operates on)
+	if (root.source) {
+		result->source = TransformTableRefNode(*root.source);
+	}
+
+	// Transform PARTITION BY clause (optional) — splits input into independent partitions
 	if (root.partition) {
 		TransformExpressionList(*root.partition, result->partition_by);
 	}
+
+	// Transform ORDER BY clause — defines the row ordering within each partition
 	TransformOrderBy(root.order, result->order_by);
 
+	// Transform MEASURES clause — defines output columns computed over matched rows
+	// Each measure is a ResTarget node with an expression and an optional alias
 	if (root.measures) {
 		for (auto node = root.measures->head; node != nullptr; node = node->next) {
 			auto raw_node = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
@@ -29,6 +41,8 @@ unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGM
 		}
 	}
 
+	// Transform DEFINE clause — assigns boolean conditions to pattern variables
+	// Each definition is a ResTarget: name = variable name, val = condition expression
 	if (root.define) {
 		for (auto node = root.define->head; node != nullptr; node = node->next) {
 			auto raw_node = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
@@ -36,7 +50,7 @@ unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGM
 				throw ParserException("MATCH_RECOGNIZE DEFINE: expected ResTarget node");
 			}
 			auto &target = PGCast<duckdb_libpgquery::PGResTarget>(*raw_node);
-			VariableDefinition entry;
+			DefineDefinition entry;
 			if (target.name) {
 				entry.variable_name = target.name;
 			}
@@ -45,11 +59,16 @@ unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGM
 		}
 	}
 
+	// ROWS PER MATCH — ONE ROW PER MATCH produces one summary row per match,
+	// ALL ROWS PER MATCH produces one row for each row in the match
 	result->rows_per_match =
 	    root.one_row_per_match ? RowsPerMatchType::ONE_ROW_PER_MATCH : RowsPerMatchType::ALL_ROWS_PER_MATCH;
+
+	// AFTER MATCH SKIP — controls where pattern matching resumes after a match
 	result->after_match_skip = root.skip_to_next_row ? AfterMatchSkipType::SKIP_TO_NEXT_ROW
 	                                                  : AfterMatchSkipType::SKIP_PAST_LAST_ROW;
 
+	// PATTERN — stored as a raw string, parsed later during NFA construction
 	if (root.pattern) {
 		result->pattern = root.pattern;
 	}

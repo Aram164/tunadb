@@ -39,6 +39,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::MATCH_RECOGNIZE:
+		result = MatchRecognizeRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
 		break;
@@ -154,6 +157,31 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(206, "delim_flipped", result->delim_flipped);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "is_implicit", result->is_implicit, true);
+	return std::move(result);
+}
+
+void MatchRecognizeRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "partition_by", partition_by);
+	serializer.WritePropertyWithDefault<vector<OrderByNode>>(202, "order_by", order_by);
+	serializer.WritePropertyWithDefault<vector<MeasureDefinition>>(203, "measures", measures);
+	serializer.WriteProperty<RowsPerMatchType>(204, "rows_per_match", rows_per_match);
+	serializer.WriteProperty<AfterMatchSkipType>(205, "after_match_skip", after_match_skip);
+	serializer.WritePropertyWithDefault<string>(206, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<DefineDefinition>>(207, "define", define);
+}
+
+unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MatchRecognizeRef>(new MatchRecognizeRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "source", result->source);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "partition_by", result->partition_by);
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(202, "order_by", result->order_by);
+	deserializer.ReadPropertyWithDefault<vector<MeasureDefinition>>(203, "measures", result->measures);
+	deserializer.ReadProperty<RowsPerMatchType>(204, "rows_per_match", result->rows_per_match);
+	deserializer.ReadProperty<AfterMatchSkipType>(205, "after_match_skip", result->after_match_skip);
+	deserializer.ReadPropertyWithDefault<string>(206, "pattern", result->pattern);
+	deserializer.ReadPropertyWithDefault<vector<DefineDefinition>>(207, "define", result->define);
 	return std::move(result);
 }
 

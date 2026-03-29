@@ -1,11 +1,22 @@
 #include "duckdb/parser/tableref/match_recognize_ref.hpp"
 
-#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+// ===== MeasureDefinition =====
+
+MeasureDefinition::MeasureDefinition(unique_ptr<ParsedExpression> expression, string alias)
+    : expression(std::move(expression)), alias(std::move(alias)) {
+}
+
+bool MeasureDefinition::Equals(const MeasureDefinition &other) const {
+	return alias == other.alias && ParsedExpression::Equals(expression, other.expression);
+}
 
 MeasureDefinition MeasureDefinition::Copy() const {
 	MeasureDefinition result;
@@ -14,19 +25,43 @@ MeasureDefinition MeasureDefinition::Copy() const {
 	return result;
 }
 
-bool MeasureDefinition::Equals(const MeasureDefinition &other) const {
-	return alias == other.alias && ParsedExpression::Equals(expression, other.expression);
+void MeasureDefinition::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(1, "expression", expression);
+	serializer.WritePropertyWithDefault<string>(2, "alias", alias);
 }
 
-VariableDefinition VariableDefinition::Copy() const {
-	VariableDefinition result;
+MeasureDefinition MeasureDefinition::Deserialize(Deserializer &deserializer) {
+	MeasureDefinition result;
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(1, "expression", result.expression);
+	deserializer.ReadPropertyWithDefault<string>(2, "alias", result.alias);
+	return result;
+}
+
+DefineDefinition::DefineDefinition(string variable_name, unique_ptr<ParsedExpression> condition)
+    : variable_name(std::move(variable_name)), condition(std::move(condition)) {
+}
+
+bool DefineDefinition::Equals(const DefineDefinition &other) const {
+	return variable_name == other.variable_name && ParsedExpression::Equals(condition, other.condition);
+}
+
+DefineDefinition DefineDefinition::Copy() const {
+	DefineDefinition result;
 	result.variable_name = variable_name;
 	result.condition = condition ? condition->Copy() : nullptr;
 	return result;
 }
 
-bool VariableDefinition::Equals(const VariableDefinition &other) const {
-	return variable_name == other.variable_name && ParsedExpression::Equals(condition, other.condition);
+void DefineDefinition::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "variable_name", variable_name);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(2, "condition", condition);
+}
+
+DefineDefinition DefineDefinition::Deserialize(Deserializer &source) {
+	DefineDefinition result;
+	source.ReadPropertyWithDefault<string>(1, "variable_name", result.variable_name);
+	source.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(2, "condition", result.condition);
+	return result;
 }
 
 static string ToStringOrderBy(const vector<OrderByNode> &orders) {
@@ -69,7 +104,7 @@ static string ToStringMeasures(const vector<MeasureDefinition> &measures) {
 	return result;
 }
 
-static string ToStringDefine(const vector<VariableDefinition> &definitions) {
+static string ToStringDefine(const vector<DefineDefinition> &definitions) {
 	string result;
 	for (idx_t i = 0; i < definitions.size(); i++) {
 		if (i > 0) {
@@ -115,7 +150,6 @@ string MatchRecognizeRef::ToString() const {
 	if (!define.empty()) {
 		AppendClause(result, has_clause, "DEFINE " + ToStringDefine(define));
 	}
-
 	result += ")";
 	return BaseToString(result);
 }
@@ -158,6 +192,7 @@ bool MatchRecognizeRef::Equals(const TableRef &other_p) const {
 			return false;
 		}
 	}
+
 	return rows_per_match == other.rows_per_match && after_match_skip == other.after_match_skip && pattern == other.pattern;
 }
 
@@ -181,14 +216,6 @@ unique_ptr<TableRef> MatchRecognizeRef::Copy() {
 	}
 	CopyProperties(*copy);
 	return std::move(copy);
-}
-
-void MatchRecognizeRef::Serialize(Serializer &serializer) const {
-	throw NotImplementedException("MatchRecognizeRef serialization is not implemented");
-}
-
-unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
-	throw NotImplementedException("MatchRecognizeRef deserialization is not implemented");
 }
 
 } // namespace duckdb

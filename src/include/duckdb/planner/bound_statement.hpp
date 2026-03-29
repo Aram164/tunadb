@@ -21,12 +21,14 @@ struct LogicalType;
 struct BoundStatement;
 class ParsedExpression;
 class Binder;
+class BoundMatchRecognizeRef;
 
 struct ExtraBoundInfo {
 	SetOperationType setop_type = SetOperationType::NONE;
 	vector<shared_ptr<Binder>> child_binders;
 	vector<BoundStatement> bound_children;
 	vector<unique_ptr<ParsedExpression>> original_expressions;
+    shared_ptr<BoundMatchRecognizeRef> match_recognize;
 };
 
 struct BoundStatement {

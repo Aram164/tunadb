@@ -168,6 +168,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalReset>());
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return CreatePlan(op.Cast<LogicalPivot>());
+	case LogicalOperatorType::LOGICAL_MATCH_RECOGNIZE:
+		return CreatePlan(op.Cast<LogicalMatchRecognize>());
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:

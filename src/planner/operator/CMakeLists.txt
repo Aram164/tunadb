@@ -29,6 +29,7 @@ add_library_unity(
   logical_merge_into.cpp
   logical_order.cpp
   logical_pivot.cpp
+  logical_match_recognize.cpp
   logical_positional_join.cpp
   logical_pragma.cpp
   logical_prepare.cpp

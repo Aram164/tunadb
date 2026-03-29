@@ -1,4 +1,3 @@
-
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -11,6 +10,7 @@
 
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -24,20 +24,34 @@ enum class AfterMatchSkipType : uint8_t {
 	SKIP_TO_NEXT_ROW = 1
 };
 
+//! Represents a single MEASURES entry: expr AS alias
 struct MeasureDefinition {
 	unique_ptr<ParsedExpression> expression;
 	string alias;
 
+	MeasureDefinition() = default;
+	MeasureDefinition(unique_ptr<ParsedExpression> expr, string alias);
+
 	MeasureDefinition Copy() const;
 	bool Equals(const MeasureDefinition &other) const;
+
+	void Serialize(Serializer &serializer) const;
+	static MeasureDefinition Deserialize(Deserializer &source);
 };
 
-struct VariableDefinition {
+//! Represents a single DEFINE entry: variable_name AS condition
+struct DefineDefinition {
 	string variable_name;
 	unique_ptr<ParsedExpression> condition;
 
-	VariableDefinition Copy() const;
-	bool Equals(const VariableDefinition &other) const;
+	DefineDefinition() = default;
+	DefineDefinition(string variable_name, unique_ptr<ParsedExpression> condition);
+
+	bool Equals(const DefineDefinition &other) const;
+	DefineDefinition Copy() const;
+
+	void Serialize(Serializer &serializer) const;
+	static DefineDefinition Deserialize(Deserializer &source);
 };
 
 //! Represents a MATCH_RECOGNIZE clause attached to a table source
@@ -46,7 +60,8 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::MATCH_RECOGNIZE;
 
 public:
-	MatchRecognizeRef() : TableRef(TableReferenceType::MATCH_RECOGNIZE) {
+	MatchRecognizeRef()
+	    : TableRef(TableReferenceType::MATCH_RECOGNIZE), rows_per_match(RowsPerMatchType::ONE_ROW_PER_MATCH), after_match_skip(AfterMatchSkipType::SKIP_PAST_LAST_ROW) {
 	}
 
 	//! Source table/subquery the clause is attached to
@@ -64,7 +79,7 @@ public:
 	//! PATTERN text
 	string pattern;
 	//! DEFINE definitions
-	vector<VariableDefinition> define;
+	vector<DefineDefinition> define;
 
 public:
 	string ToString() const override;

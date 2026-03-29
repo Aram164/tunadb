@@ -163,6 +163,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/match_recognize_ref.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
@@ -256,6 +257,24 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value) {
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	return static_cast<AccessMode>(StringUtil::StringToEnum(GetAccessModeValues(), 4, "AccessMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAfterMatchSkipTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AfterMatchSkipType::SKIP_PAST_LAST_ROW), "SKIP_PAST_LAST_ROW" },
+		{ static_cast<uint32_t>(AfterMatchSkipType::SKIP_TO_NEXT_ROW), "SKIP_TO_NEXT_ROW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AfterMatchSkipType>(AfterMatchSkipType value) {
+	return StringUtil::EnumToString(GetAfterMatchSkipTypeValues(), 2, "AfterMatchSkipType", static_cast<uint32_t>(value));
+}
+
+template<>
+AfterMatchSkipType EnumUtil::FromString<AfterMatchSkipType>(const char *value) {
+	return static_cast<AfterMatchSkipType>(StringUtil::StringToEnum(GetAfterMatchSkipTypeValues(), 2, "AfterMatchSkipType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
@@ -2607,6 +2626,7 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SAMPLE), "LOGICAL_SAMPLE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PIVOT), "LOGICAL_PIVOT" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_DATABASE), "LOGICAL_COPY_DATABASE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_MATCH_RECOGNIZE), "LOGICAL_MATCH_RECOGNIZE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_GET), "LOGICAL_GET" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CHUNK_GET), "LOGICAL_CHUNK_GET" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_GET), "LOGICAL_DELIM_GET" },
@@ -2661,12 +2681,12 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
-	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 62, "LogicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 63, "LogicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
-	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 62, "LogicalOperatorType", value));
+	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 63, "LogicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
@@ -3472,6 +3492,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::STREAMING_SAMPLE), "STREAMING_SAMPLE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::STREAMING_WINDOW), "STREAMING_WINDOW" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::PIVOT), "PIVOT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::MATCH_RECOGNIZE), "MATCH_RECOGNIZE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::COPY_DATABASE), "COPY_DATABASE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::TABLE_SCAN), "TABLE_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::DUMMY_SCAN), "DUMMY_SCAN" },
@@ -3540,12 +3561,12 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 82, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 83, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 82, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 83, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTableScanExecutionStrategyValues() {
@@ -3940,6 +3961,24 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	return static_cast<ResultModifierType>(StringUtil::StringToEnum(GetResultModifierTypeValues(), 4, "ResultModifierType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRowsPerMatchTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RowsPerMatchType::ONE_ROW_PER_MATCH), "ONE_ROW_PER_MATCH" },
+		{ static_cast<uint32_t>(RowsPerMatchType::ALL_ROWS_PER_MATCH), "ALL_ROWS_PER_MATCH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RowsPerMatchType>(RowsPerMatchType value) {
+	return StringUtil::EnumToString(GetRowsPerMatchTypeValues(), 2, "RowsPerMatchType", static_cast<uint32_t>(value));
+}
+
+template<>
+RowsPerMatchType EnumUtil::FromString<RowsPerMatchType>(const char *value) {
+	return static_cast<RowsPerMatchType>(StringUtil::StringToEnum(GetRowsPerMatchTypeValues(), 2, "RowsPerMatchType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
