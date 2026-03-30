@@ -402,9 +402,13 @@
     { "id": 201,
       "name": "condition",
       "type": "Expression*"
+    },
+    { "id": 202,
+      "name": "has_prev",
+      "type": "bool"
     }
   ],
-  "constructor": ["variable_name", "condition"]
+  "constructor": ["variable_name", "condition", "has_prev"]
   },
   {
   "class": "BoundMeasure",

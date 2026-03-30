@@ -101,12 +101,14 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 void BoundDefine::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "variable_name", variable_name);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
+	serializer.WritePropertyWithDefault<bool>(202, "has_prev", has_prev);
 }
 
 BoundDefine BoundDefine::Deserialize(Deserializer &deserializer) {
 	auto variable_name = deserializer.ReadPropertyWithDefault<string>(200, "variable_name");
 	auto condition = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition");
-	BoundDefine result(std::move(variable_name), std::move(condition));
+	auto has_prev = deserializer.ReadPropertyWithDefault<bool>(202, "has_prev");
+	BoundDefine result(std::move(variable_name), std::move(condition), has_prev);
 	return result;
 }
 

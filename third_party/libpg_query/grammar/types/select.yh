@@ -141,7 +141,7 @@
 %type <ival> mr_rows_per_match_clause mr_after_match_skip_clause mr_skip_option
 %type <node> mr_opt_within_clause  
 %type <str> mr_pattern_clause
-%type <node> mr_measure mr_measure_expr mr_nav_expr mr_agg_expr mr_value_ref
+%type <node> mr_measure mr_measure_expr mr_nav_expr mr_agg_expr mr_value_ref mr_count_arg
 
 
 %type <node> mr_define_item  

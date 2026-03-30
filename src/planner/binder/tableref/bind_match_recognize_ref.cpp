@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_match_recognize.hpp"
 
@@ -45,6 +46,12 @@ unordered_set<string> ExtractPatternVars(string pattern) {
         }
         else if (c == '*' || c == '+' || c == '?' || c == '|' || c == '(' || c == ')' || c == ' ' ) {
             if (!var.empty()) {
+                if (var.size() > 1) {
+                    throw BinderException("MATCH RECOGNIZE: pattern variable '%s' must be a single character"
+                                          " (the pattern parser treats each letter as a separate variable,"
+                                          " so '%s' would be interpreted as concatenation of %zu variables)",
+                                          var, var, var.size());
+                }
                 pattern_vars.insert(var);
                 var.clear();
             }
@@ -54,11 +61,18 @@ unordered_set<string> ExtractPatternVars(string pattern) {
         }
     }
     if (!var.empty()) {
+        if (var.size() > 1) {
+            throw BinderException("MATCH RECOGNIZE: pattern variable '%s' must be a single character"
+                                  " (the pattern parser treats each letter as a separate variable,"
+                                  " so '%s' would be interpreted as concatenation of %zu variables)",
+                                  var, var, var.size());
+        }
         pattern_vars.insert(var);
     }
 
     return pattern_vars;
 }
+
 
 // Recursively walk a parsed expression tree.
 // If a node is a two-part column reference like A.val where A is a pattern
@@ -91,26 +105,30 @@ void ValidateAndRewriteVarCol(unique_ptr<ParsedExpression> &expr, const unordere
 
 // Recursively walk a parsed expression tree.
 // If a node is PREV(col), validate that the argument is a column reference,
-// then replace the PREV(col) node with just col.
-void ValidateAndRewritePrev(unique_ptr<ParsedExpression> &expr) {
-    // first recurse into all children
-    ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-        ValidateAndRewritePrev(child);
-    });
-
-    // then check if this node itself is PREV(...)
+// then replace the PREV(col) node with just col, but mark it with alias
+// "__mr_prev__" so the executor can later identify and handle it.
+void ValidateAndRewritePrev(unique_ptr<ParsedExpression> &expr, bool &has_prev) {
     if (expr->type == ExpressionType::FUNCTION) {
         auto &func = expr->Cast<FunctionExpression>();
         if (StringUtil::Lower(func.function_name) == "prev") {
             if (func.children.size() != 1) {
-                throw BinderException("PREV() requires exactly one argument");
+                throw BinderException("MATCH RECOGNIZE: PREV() requires exactly one argument");
             }
             if (func.children[0]->type != ExpressionType::COLUMN_REF) {
-                throw BinderException("PREV() argument must be a column reference");
+                throw BinderException("MATCH RECOGNIZE: PREV() argument must be a column reference");
             }
+            // Strip PREV wrapper, keep the inner column ref
             expr = std::move(func.children[0]);
+            // Mark with alias so the executor can find this node after binding
+            expr->alias = "__mr_prev__";
+            has_prev = true;
+            return;
         }
     }
+
+    ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+        ValidateAndRewritePrev(child, has_prev);
+    });
 }
 
 BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
@@ -163,8 +181,9 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
         // validate and rewrite references like 'var.col' (e.g. A.val → val)  before binding
         ValidateAndRewriteVarCol(define.condition, pattern_vars);
 
-        // validate and rewrite PREV(col) → col before binding
-        ValidateAndRewritePrev(define.condition);
+        // validate and rewrite PREV(col) → col (marked with alias) before binding
+        bool define_has_prev = false;
+        ValidateAndRewritePrev(define.condition, define_has_prev);
 
         unique_ptr<Expression> bound_expr;
         try {
@@ -178,12 +197,12 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
             throw BinderException("DEFINE condition for '%s' must return BOOLEAN, got %s", define.variable_name.c_str(), bound_expr->return_type.ToString());
         }
 
-        result.bound_mr.defines.emplace_back(define.variable_name, std::move(bound_expr));
+        result.bound_mr.defines.emplace_back(define.variable_name, std::move(bound_expr), define_has_prev);
     }
 
-    // bind MEASURES: each must be var.col or FUNC(var.col) AS alias
+    // bind MEASURES: each must be var.col, FUNC(var.col), COUNT(*), or COUNT(var.*) AS alias
     const unordered_set<string> allowed_functions = {
-        "FIRST", "LAST", "COUNT", "MIN", "MAX", "SUM", "AVG"
+        "FIRST", "LAST", "COUNT", "COUNT_STAR", "MIN", "MAX", "SUM", "AVG"
     };
 
     for (auto &measure : ref.measures) {
@@ -196,26 +215,53 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
             // bare var.col form
             auto &col_ref = expr->Cast<ColumnRefExpression>();
             if (col_ref.column_names.size() != 2) {
-                throw BinderException("MEASURES expression '%s' must be var.col or FUNC(var.col)",
+                throw BinderException("MEASURES expression '%s' must be var.col, FUNC(var.col), or COUNT(*)",
                                       expr->ToString());
             }
             var_name = col_ref.column_names[0];
             col_name = col_ref.column_names[1];
 
         } else if (expr->type == ExpressionType::FUNCTION) {
-            // FUNC(var.col) form (e.g. LAST(B.totalprice) AS bottom_price)
             auto &func = expr->Cast<FunctionExpression>();
             func_name = StringUtil::Upper(func.function_name);
 
+            // COUNT(*) arrives from the transformer as "count_star" with empty children.
+            // Handle it as a special case: no var.col needed, counts all rows in the match.
+            if (func_name == "COUNT_STAR") {
+                LogicalType output_type = LogicalType::BIGINT;
+                result.bound_mr.measures.emplace_back(func_name, /*var*/ "", /*col*/ "",
+                                             LogicalType::BIGINT, measure.alias, output_type, 0);
+                result.bound_mr.measure_input_refs.push_back(nullptr);
+                continue;
+            }
+
+            // COUNT(var.*): count only the rows bound to the given pattern variable.
+            // No input column is needed for this, only the variable name.
+            if (func_name == "COUNT" && func.children.size() == 1 && func.children[0]->type == ExpressionType::STAR) {
+                auto &star = func.children[0]->Cast<StarExpression>();
+                if (star.relation_name.empty() || star.columns || star.expr || !star.exclude_list.empty() ||
+                    !star.replace_list.empty() || !star.rename_list.empty()) {
+                    throw BinderException("MEASURES function '%s' argument must be var.col, var.*, or *",
+                                          func.function_name);
+                }
+                var_name = star.relation_name;
+                LogicalType output_type = LogicalType::BIGINT;
+                result.bound_mr.measures.emplace_back(func_name, var_name, /*col*/ "",
+                                             LogicalType::BIGINT, measure.alias, output_type, 0);
+                result.bound_mr.measure_input_refs.push_back(nullptr);
+                continue;
+            }
+
+            // FUNC(var.col) form (e.g. LAST(B.totalprice) AS bottom_price)
             if (!allowed_functions.count(func_name)) {
-                throw BinderException("Unknown MEASURES function '%s'. Allowed: FIRST, LAST, COUNT, MIN, MAX, SUM, AVG",
+                throw BinderException("Unknown MEASURES function '%s'. Allowed: FIRST, LAST, COUNT(var.col), COUNT(var.*), COUNT(*), MIN, MAX, SUM, AVG",
                                       func.function_name);
             }
             if (func.children.size() != 1) {
                 throw BinderException("MEASURES function '%s' requires exactly one argument", func.function_name);
             }
             if (func.children[0]->type != ExpressionType::COLUMN_REF) {
-                throw BinderException("MEASURES function '%s' argument must be a column reference (var.col)",
+                throw BinderException("MEASURES function '%s' argument must be a column reference (var.col) or var.*",
                                       func.function_name);
             }
 
@@ -228,7 +274,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
             col_name = arg.column_names[1];
 
         } else {
-            throw BinderException("MEASURES expression '%s' must be var.col or FUNC(var.col)",
+            throw BinderException("MEASURES expression '%s' must be var.col, FUNC(var.col), COUNT(var.*), or COUNT(*)",
                                   expr->ToString());
         }
 

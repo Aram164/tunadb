@@ -16,6 +16,8 @@ vector<MRMatchResult> MRRunPatternMatching(const string &pattern, idx_t num_rows
     NFA nfa = build_from_AST(ast);
     delete(ast);
 
+	auto masks = var_masks;
+
 	// attach guard functions
 	for (State &state : nfa.states) {
 		auto attach_guard = [&](Transition &trans) {
@@ -24,10 +26,10 @@ vector<MRMatchResult> MRRunPatternMatching(const string &pattern, idx_t num_rows
 				return;
 			}
 			std::string var_name(1, trans.var);
-			auto iterator = var_masks.find(var_name);
-			// we assume that wildcards are explicitly defined 
-			if (iterator == var_masks.end()) {
-				throw InternalException("MATCH_RECOGNIZE: pattern variable '%s' has no DEFINE entry", var_name);
+			auto iterator = masks.find(var_name);
+			if (iterator == masks.end()) {
+				masks[var_name] = vector<bool>(num_rows, true);
+				iterator = masks.find(var_name);
 			}
 			const std::vector<bool> *mask = &iterator->second;
 			trans.guard = [mask](const std::vector<matchedVar> &, int row_idx) {

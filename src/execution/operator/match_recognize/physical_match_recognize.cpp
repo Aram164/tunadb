@@ -4,6 +4,7 @@
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -282,16 +283,59 @@ static void DetectTies(const vector<BoundOrderByNode> &order_by,
 
 //===--------------------------------------------------------------------===//
 // Evaluate DEFINE conditions -> per-variable boolean masks
-//===--------------------------------------------------------------------===//
+// Walk a bound expression tree and find BoundReferenceExpression nodes marked
+// with alias "__mr_prev__". Change their index to point to a new column (the
+// shifted PREV column). Each distinct source column gets its own appended
+// shifted column in the extended chunk.
+static void PatchPrevReferences(Expression &expr, idx_t num_cols, unordered_map<idx_t, idx_t> &prev_col_map,
+                                vector<idx_t> &prev_cols) {
+	if (expr.type == ExpressionType::BOUND_REF) {
+		auto &ref = expr.Cast<BoundReferenceExpression>();
+		if (ref.alias == "__mr_prev__") {
+			auto entry = prev_col_map.find(ref.index);
+			if (entry == prev_col_map.end()) {
+				idx_t new_col_idx = num_cols + prev_cols.size();
+				prev_col_map[ref.index] = new_col_idx;
+				prev_cols.push_back(ref.index);
+				ref.index = new_col_idx;
+			} else {
+				ref.index = entry->second;
+			}
+		}
+	} else if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &ref = expr.Cast<BoundColumnRefExpression>();
+		if (ref.alias == "__mr_prev__") {
+			auto entry = prev_col_map.find(ref.binding.column_index);
+			if (entry == prev_col_map.end()) {
+				idx_t new_col_idx = num_cols + prev_cols.size();
+				prev_col_map[ref.binding.column_index] = new_col_idx;
+				prev_cols.push_back(ref.binding.column_index);
+				ref.binding.column_index = new_col_idx;
+			} else {
+				ref.binding.column_index = entry->second;
+			}
+		}
+	}
+
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+		PatchPrevReferences(child, num_cols, prev_col_map, prev_cols);
+	});
+}
 
 // Evaluates every DEFINE condition on the partition and returns a map from
 // pattern variable name to a boolean mask (one bool per row). The NFA guard
 // functions later check these masks to decide whether a variable matches at
 // a given row position.
+//
+// For defines that use PREV(), we build an extended DataChunk with an extra
+// column containing the shifted (previous row) values. The PREV'd expression
+// node has been rewritten to reference this extra column, so the
+// ExpressionExecutor evaluates the full boolean expression correctly.
 static unordered_map<string, vector<bool>> EvaluateDefines(const vector<BoundDefine> &defines,
-                                                            ColumnDataCollection &partition, ClientContext &client) {
+                                                           ColumnDataCollection &partition, ClientContext &client) {
 	unordered_map<string, vector<bool>> var_masks;
 	idx_t num_rows = partition.Count();
+	idx_t num_cols = partition.ColumnCount();
 
 	// Process each DEFINE independently: build an executor, scan the
 	// partition, evaluate the boolean condition, and store the result mask
@@ -302,6 +346,17 @@ static unordered_map<string, vector<bool>> EvaluateDefines(const vector<BoundDef
 		// Wrap the DEFINE condition in an ExpressionExecutor
 		vector<unique_ptr<Expression>> exprs;
 		exprs.push_back(define.condition->Copy());
+
+		vector<idx_t> prev_cols;
+		unordered_map<idx_t, idx_t> prev_col_map;
+		if (define.has_prev) {
+			PatchPrevReferences(*exprs[0], num_cols, prev_col_map, prev_cols);
+			if (prev_cols.empty()) {
+				throw InternalException("MATCH_RECOGNIZE: failed to find PREV() marker in DEFINE '%s'",
+				                        define.variable_name);
+			}
+		}
+
 		ExpressionExecutor executor(client, exprs);
 
 		// Prepare a fresh scan over the partition
@@ -310,12 +365,58 @@ static unordered_map<string, vector<bool>> EvaluateDefines(const vector<BoundDef
 		ColumnDataScanState scan_state;
 		partition.InitializeScan(scan_state);
 
+		// For PREV: track the last value from the previous chunk for each shifted column.
+		vector<Value> prev_carry(prev_cols.size());
+
 		idx_t row = 0;
 		while (partition.Scan(scan_state, scan_chunk)) {
-			// Allocate a boolean result chunk and execute the condition
 			DataChunk result_chunk;
 			result_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::BOOLEAN});
-			executor.Execute(scan_chunk, result_chunk);
+
+			if (define.has_prev) {
+				// Build an extended chunk: original columns + one shifted column per PREV input column
+				vector<LogicalType> extended_types = scan_chunk.GetTypes();
+				for (auto prev_col : prev_cols) {
+					extended_types.push_back(extended_types[prev_col]);
+				}
+
+				DataChunk extended_chunk;
+				extended_chunk.Initialize(Allocator::DefaultAllocator(), extended_types);
+
+				// Reference original columns (zero-copy)
+				for (idx_t c = 0; c < num_cols; c++) {
+					extended_chunk.data[c].Reference(scan_chunk.data[c]);
+				}
+				extended_chunk.SetCardinality(scan_chunk.size());
+
+				// Fill each shifted PREV column
+				for (idx_t p = 0; p < prev_cols.size(); p++) {
+					idx_t prev_orig_col = prev_cols[p];
+					auto &prev_vec = extended_chunk.data[num_cols + p];
+					for (idx_t r = 0; r < scan_chunk.size(); r++) {
+						if (r == 0) {
+							// First row of this chunk: use carried value from previous chunk
+							if (prev_carry[p].IsNull()) {
+								FlatVector::SetNull(prev_vec, r, true);
+							} else {
+								prev_vec.SetValue(r, prev_carry[p]);
+							}
+						} else {
+							// Use the previous row from the same chunk
+							prev_vec.SetValue(r, scan_chunk.GetValue(prev_orig_col, r - 1));
+						}
+					}
+
+					// Carry the last value of this chunk for the next chunk's row 0
+					prev_carry[p] = scan_chunk.GetValue(prev_orig_col, scan_chunk.size() - 1);
+				}
+
+				// Execute the expression on the extended chunk
+				executor.Execute(extended_chunk, result_chunk);
+			} else {
+				// Normal (non-PREV) evaluation
+				executor.Execute(scan_chunk, result_chunk);
+			}
 
 			// Flatten converts any dictionary/constant vectors to flat format
 			// so we can safely read the raw bool* array and validity mask
@@ -407,6 +508,15 @@ static Value ComputeMeasure(const BoundMeasure &measure, const MRMatchAssignment
 	if (func == "COUNT") {
 		return Value::BIGINT(NumericCast<int64_t>(rows.size()));
 	}
+	// COUNT(*): count ALL rows in the match, regardless of variable
+	if (func == "COUNT_STAR") {
+		// Sum all row bindings across all variables in the assignment
+		idx_t total = 0;
+		for (auto &kv : assignment) {
+			total += kv.second.size();
+		}
+		return Value::BIGINT(NumericCast<int64_t>(total));
+	}
 	// MIN: smallest non-NULL value among matched rows
 	if (func == "MIN") {
 		if (rows.empty()) {
@@ -474,7 +584,8 @@ static Value ComputeMeasure(const BoundMeasure &measure, const MRMatchAssignment
 		return Value::DOUBLE(sum / static_cast<double>(count)).DefaultCastAs(measure.output_type);
 	}
 
-	throw InternalException("MATCH_RECOGNIZE: unknown MEASURES function '%s'", func);
+	auto function_name = func == "COUNT_STAR" ? "COUNT(*)" : func;
+	throw InternalException("MATCH_RECOGNIZE: unknown MEASURES function '%s'", function_name);
 }
 
 // Per-row variant for ALL ROWS PER MATCH. For bare column references (no

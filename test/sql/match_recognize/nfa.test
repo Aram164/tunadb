@@ -22,6 +22,18 @@ SELECT count(*) FROM t MATCH_RECOGNIZE (
 ----
 3
 
+# --- Missing DEFINE entries act as wildcards ---
+query I
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP TO NEXT ROW
+    PATTERN ('A B')
+    DEFINE A AS A.id = 1
+)
+----
+1
+
 # --- Pattern "A B+", SKIP PAST LAST ROW ---
 # Greedy: one A (row 0) then B+ consumes rows 1-3 -> 1 match
 query I
@@ -103,6 +115,56 @@ SELECT first_val, last_val FROM t MATCH_RECOGNIZE (
 )
 ----
 1	4
+
+# --- COUNT(var.*): count rows bound to one variable only ---
+query I
+SELECT cnt_a FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES COUNT(A.*) AS cnt_a
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A B+')
+    DEFINE A AS A.id >= 0, B AS B.id >= 0
+)
+----
+1
+
+# --- PREV(): decreasing rows after the first row should match ---
+statement ok
+CREATE TABLE t_prev(id INTEGER, price INTEGER, ts INTEGER, p INTEGER);
+
+statement ok
+INSERT INTO t_prev VALUES
+    (1, 10, 1, 1), (2, 9, 2, 1), (3, 8, 3, 1),
+    (4, 7, 1, 2), (5, 6, 2, 2), (6, 5, 3, 2);
+
+query I
+SELECT count(*) FROM t_prev MATCH_RECOGNIZE (
+    PARTITION BY p
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A B+')
+    DEFINE A AS A.price >= 0, B AS B.price < PREV(B.price)
+)
+----
+2
+
+# --- PREV() must work across chunk boundaries ---
+statement ok
+CREATE TABLE t_prev_big AS
+SELECT i AS id, 4000 - i AS price, i AS ts
+FROM range(3000) tbl(i);
+
+query I
+SELECT count(*) FROM t_prev_big MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A B+')
+    DEFINE A AS A.price >= 0, B AS B.price < PREV(B.price)
+)
+----
+1
 
 # --- Tie detection: two rows with same ORDER BY value -> error ---
 statement error

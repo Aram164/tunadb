@@ -17,16 +17,20 @@ namespace duckdb {
 struct BoundDefine {
 	string variable_name;
 	unique_ptr<Expression> condition;
+	//! True if this DEFINE condition contains a PREV() reference.
+	//! The PREV'd expression node is marked with alias "__mr_prev__".
+	bool has_prev = false;
 
 	BoundDefine() = default;
-	BoundDefine(string variable_name, unique_ptr<Expression> condition)
-		: variable_name(std::move(variable_name)), condition(std::move(condition)) {
+	BoundDefine(string variable_name, unique_ptr<Expression> condition, bool has_prev = false)
+		: variable_name(std::move(variable_name)), condition(std::move(condition)), has_prev(has_prev) {
 	}
 
 	// Deep-copy constructor: BoundDefine owns a unique_ptr<Expression>, so we must clone the expression tree to avoid copying unique_ptrs.
 	BoundDefine(const BoundDefine &other)
 	    : variable_name(other.variable_name),
-	      condition(other.condition ? other.condition->Copy() : nullptr) {
+	      condition(other.condition ? other.condition->Copy() : nullptr),
+	      has_prev(other.has_prev) {
 	}
 
 	// Deep-copy assignment: same reason as above; replace current owned expression with a clone.
@@ -34,11 +38,12 @@ struct BoundDefine {
 		if (this == &other) return *this;
 		variable_name = other.variable_name;
 		condition = other.condition ? other.condition->Copy() : nullptr;
+		has_prev = other.has_prev;
 		return *this;
 	}
 
 	BoundDefine Copy() const {
-		return BoundDefine(variable_name, condition ? condition->Copy() : nullptr);
+		return BoundDefine(variable_name, condition ? condition->Copy() : nullptr, has_prev);
 	}
 	void Serialize(Serializer &serializer) const;
 	static BoundDefine Deserialize(Deserializer &deserializer);

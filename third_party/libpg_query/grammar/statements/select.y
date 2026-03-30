@@ -1253,17 +1253,31 @@ mr_agg_expr:
 					n->agg_star = true;
 					$$ = (PGNode *) n;
 				}
-			| COUNT_P '(' mr_value_ref ')'
+			| COUNT_P '(' mr_count_arg ')'
 				{
 					PGFuncCall *n = makeFuncCall(SystemFuncName("count"), list_make1($3), @1);
 					$$ = (PGNode *) n;
 				}
 ;
 
+mr_count_arg:
+			mr_value_ref
+				{
+					$$ = $1;
+				}
+			| ColId '.' '*'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->relation = $1;
+					star->location = @1;
+					$$ = (PGNode *) star;
+				}
+;
+
 mr_value_ref:
 			columnref_opt_indirection
 				{
-					// TODO: GRM5 restrict to var.col and support COUNT(var.*).
+					// TODO: GRM5 restrict to var.col.
 					$$ = $1;
 				}
 ;
