@@ -1,4 +1,4 @@
-/*
+ /*
  * The signature of this function is required by bison.  However, we
  * ignore the passed yylloc and instead use the last token position
  * available from the scanner.

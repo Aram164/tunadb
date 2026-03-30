@@ -219,6 +219,11 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &define : mr.bound_mr.defines) {
 			callback(&define.condition);
 		}
+		for (auto &measure_ref : mr.bound_mr.measure_input_refs) {
+			if (measure_ref) {
+				callback(&measure_ref);
+			}
+		}
 		break;
 	}
 	default:

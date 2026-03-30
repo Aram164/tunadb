@@ -4,6 +4,7 @@
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
@@ -62,6 +63,25 @@ PhysicalMatchRecognize::PhysicalMatchRecognize(PhysicalPlan &physical_plan, Boun
       bound_mr(std::move(bound_mr)) {
 }
 
+static void RefreshMeasureInputIndices(BoundMatchRecognizeInfo &bound_mr) {
+	for (idx_t i = 0; i < bound_mr.measures.size() && i < bound_mr.measure_input_refs.size(); i++) {
+		auto &measure_ref = bound_mr.measure_input_refs[i];
+		if (!measure_ref) {
+			continue;
+		}
+		switch (measure_ref->GetExpressionClass()) {
+		case ExpressionClass::BOUND_REF:
+			bound_mr.measures[i].input_column_index = measure_ref->Cast<BoundReferenceExpression>().index;
+			break;
+		case ExpressionClass::BOUND_COLUMN_REF:
+			bound_mr.measures[i].input_column_index = measure_ref->Cast<BoundColumnRefExpression>().binding.column_index;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -103,6 +123,8 @@ unique_ptr<GlobalSinkState> PhysicalMatchRecognize::GetGlobalSinkState(ClientCon
 
 // Finalize
 SinkFinalizeType PhysicalMatchRecognize::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, OperatorSinkFinalizeInput &input) const {
+	RefreshMeasureInputIndices(bound_mr);
+
 	auto &gstate = input.global_state.Cast<MatchRecognizeGlobalSinkState>();
 
 	OperatorSinkFinalizeInput child_finalize {*gstate.strategy_sink, input.interrupt_state};
@@ -369,13 +391,6 @@ static Value ComputeMeasure(const BoundMeasure &measure, const MRMatchAssignment
 
 	// LAST (or bare column reference with no function): return the last matched row's value
 	if (func.empty() || func == "LAST") {
-		if (rows.empty()) {
-			return Value(measure.output_type);
-		}
-		return partition_rows[rows.back()][col_idx].DefaultCastAs(measure.output_type);
-	}
-	// FIRST: return the first matched row's value
-	if (func == "FIRST") {
 		if (rows.empty()) {
 			return Value(measure.output_type);
 		}

@@ -136,6 +136,7 @@ void BoundMatchRecognizeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<BoundMeasure>>(206, "measures", measures);
 	serializer.WritePropertyWithDefault<vector<string>>(207, "names", names);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "types", types);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(209, "measure_input_refs", measure_input_refs);
 }
 
 BoundMatchRecognizeInfo BoundMatchRecognizeInfo::Deserialize(Deserializer &deserializer) {
@@ -149,6 +150,7 @@ BoundMatchRecognizeInfo BoundMatchRecognizeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<vector<BoundMeasure>>(206, "measures", result.measures);
 	deserializer.ReadPropertyWithDefault<vector<string>>(207, "names", result.names);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "types", result.types);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(209, "measure_input_refs", result.measure_input_refs);
 	return result;
 }
 

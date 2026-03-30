@@ -1255,7 +1255,7 @@ typedef struct PGPivotStmt {
  * A "simple" SELECT is represented in the output of gram.y by a single
  * PGSelectStmt node; so is a VALUES construct.  A query containing set
  * operators (UNION, INTERSECT, EXCEPT) is represented by a tree of PGSelectStmt
- * nodes, in which the leaf nodes are component SELECTs and the internal nodes
+ * nodes, in which the leaf nodes are component (SELECT)s and the internal nodes
  * represent UNION, INTERSECT, or EXCEPT operators.  Using the same node
  * type for both leaf and internal nodes allows gram.y to stick ORDER BY,
  * LIMIT, etc, clause values into a SELECT statement without worrying

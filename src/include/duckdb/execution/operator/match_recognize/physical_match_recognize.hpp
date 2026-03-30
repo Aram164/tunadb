@@ -22,7 +22,7 @@ public:
 public:
 	PhysicalMatchRecognize(PhysicalPlan &physical_plan, BoundMatchRecognizeInfo bound_mr, idx_t estimated_cardinality);
 
-	BoundMatchRecognizeInfo bound_mr;
+	mutable BoundMatchRecognizeInfo bound_mr;
 
 public:
 	// Source Interface

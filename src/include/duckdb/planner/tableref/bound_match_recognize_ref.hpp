@@ -95,6 +95,8 @@ struct BoundMatchRecognizeInfo {
 	string pattern;
 	//! The bound MEASURES entries
 	vector<BoundMeasure> measures;
+	//! Bound input refs for MEASURES columns so ColumnBindingResolver can remap them after pruning
+	vector<unique_ptr<Expression>> measure_input_refs;
 	//! The schema currently exported by the relation
 	vector<string> names;
 	vector<LogicalType> types;
@@ -114,6 +116,9 @@ struct BoundMatchRecognizeInfo {
 			defines.push_back(d);
 		}
 		measures = other.measures;
+		for (auto &ref : other.measure_input_refs) {
+			measure_input_refs.push_back(ref ? ref->Copy() : nullptr);
+		}
 		one_row_per_match = other.one_row_per_match;
 		skip_to_next_row = other.skip_to_next_row;
 		pattern = other.pattern;
@@ -127,6 +132,7 @@ struct BoundMatchRecognizeInfo {
 		partition_by.clear();
 		order_by.clear();
 		defines.clear();
+		measure_input_refs.clear();
 
 		for (auto &p : other.partition_by) {
 			partition_by.push_back(p ? p->Copy() : nullptr);
@@ -138,6 +144,9 @@ struct BoundMatchRecognizeInfo {
 			defines.push_back(d);
 		}
 		measures = other.measures;
+		for (auto &ref : other.measure_input_refs) {
+			measure_input_refs.push_back(ref ? ref->Copy() : nullptr);
+		}
 		one_row_per_match = other.one_row_per_match;
 		skip_to_next_row = other.skip_to_next_row;
 		pattern = other.pattern;
@@ -159,6 +168,9 @@ struct BoundMatchRecognizeInfo {
 		}
 		for (auto &m : measures) {
 			copy.measures.push_back(m.Copy());
+		}
+		for (auto &ref : measure_input_refs) {
+			copy.measure_input_refs.push_back(ref ? ref->Copy() : nullptr);
 		}
 		copy.one_row_per_match = one_row_per_match;
 		copy.skip_to_next_row = skip_to_next_row;

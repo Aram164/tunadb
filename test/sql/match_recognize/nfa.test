@@ -57,7 +57,7 @@ SELECT count(*) FROM t2 MATCH_RECOGNIZE (
 ----
 2
 
-# --- MEASURES output is currently NULL (PHY1 placeholder) ---
+# --- MEASURES output now returns bound values instead of the old PHY1 NULL placeholder ---
 query I
 SELECT m IS NULL FROM t MATCH_RECOGNIZE (
     ORDER BY ts
@@ -67,8 +67,42 @@ SELECT m IS NULL FROM t MATCH_RECOGNIZE (
     DEFINE A AS A.id >= 0, B AS B.id >= 0
 )
 ----
-true
-true
+0
+0
+
+# --- MEASURES input columns must survive child column remapping/pruning ---
+statement ok
+CREATE TABLE t3(id INTEGER, payload INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO t3 VALUES (1, 10, 1), (2, 20, 2), (3, 30, 3);
+
+query I
+SELECT m FROM t3 MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.payload AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A')
+    DEFINE A AS A.id >= 0
+)
+----
+10
+20
+30
+
+# --- FIRST vs LAST: must return different rows ---
+# Pattern "A B+": A binds row 0 (id=1), B binds rows 1-3 (id=2,3,4)
+# FIRST(A.id) = 1, LAST(B.id) = 4
+query II
+SELECT first_val, last_val FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES FIRST(A.id) AS first_val, LAST(B.id) AS last_val
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A B+')
+    DEFINE A AS A.id >= 0, B AS B.id >= 0
+)
+----
+1	4
 
 # --- Tie detection: two rows with same ORDER BY value -> error ---
 statement error

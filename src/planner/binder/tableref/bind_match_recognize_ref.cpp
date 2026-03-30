@@ -255,6 +255,7 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
 
         result.bound_mr.measures.emplace_back(func_name, var_name, col_name,
                                      input_type, measure.alias, output_type, col_idx);
+		result.bound_mr.measure_input_refs.push_back(std::move(bound_col));
     }
 
     // build output schema from MEASURES columns
