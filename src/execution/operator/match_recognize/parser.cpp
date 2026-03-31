@@ -12,6 +12,32 @@ Node::~Node() {
 Parser::Parser(Lexer &lexer) 
     : lexer(lexer), has_lookahead(false) {}
 
+static std::string TokenToString(TokenType type) {
+    switch (type) {
+    case TokenType::VAR:
+        return "variable";
+    case TokenType::LPAREN:
+        return "'('";
+    case TokenType::RPAREN:
+        return "')'";
+    case TokenType::LBRACE:
+        return "'{'";
+    case TokenType::RBRACE:
+        return "'}'";
+    case TokenType::STAR:
+        return "'*'";
+    case TokenType::PLUS:
+        return "'+'";
+    case TokenType::OPTIONAL:
+        return "'?'";
+    case TokenType::OR:
+        return "'|'";
+    case TokenType::END:
+        return "end of pattern";
+    default:
+        return "token";
+    }
+}
 
 Token Parser::peek() {
     if(!has_lookahead) {
@@ -38,6 +64,16 @@ bool is_quantifier(TokenType t) {
 
 bool is_quantifier(NodeType type) {
     return type == NodeType::STAR || type == NodeType::PLUS || type == NodeType::OPTIONAL;
+}
+
+Node* Parser::parse() {
+    Node* root = parse_pattern();
+    Token trailing = peek();
+    if (trailing.type != TokenType::END) {
+        delete root;
+        throw std::runtime_error("Unexpected trailing token " + TokenToString(trailing.type));
+    }
+    return root;
 }
 
 /* 
@@ -91,7 +127,7 @@ Node* Parser::parse_piece() {
     Token t = peek();
 
     if(t.type == TokenType::LBRACE || t.type == TokenType::RBRACE) { 
-        throw std::runtime_error("Quantifier syntax {m,n} is not supported."); 
+        throw std::runtime_error("Quantifier syntax {m,n} is not supported");
     }
     
     if(is_quantifier(t.type)) {
@@ -104,6 +140,17 @@ Node* Parser::parse_piece() {
         );
         parent->left = node;
         node = parent;
+
+        Token next = peek();
+        if (next.type == TokenType::OPTIONAL) {
+            throw std::runtime_error("Reluctant quantifiers are not supported");
+        }
+        if (next.type == TokenType::STAR || next.type == TokenType::PLUS) {
+            throw std::runtime_error("Multiple quantifiers on one pattern atom are not supported");
+        }
+        if (next.type == TokenType::LBRACE || next.type == TokenType::RBRACE) {
+            throw std::runtime_error("Quantifier syntax {m,n} is not supported");
+        }
     }
 
     return node;
@@ -124,6 +171,6 @@ Node* Parser::parse_atom() {
         }
         return node;
     } else {
-        throw std::runtime_error("Unexpected token in atom");
+        throw std::runtime_error("Unexpected token " + TokenToString(t.type) + " in PATTERN");
     }
 }

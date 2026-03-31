@@ -56,8 +56,11 @@ unordered_set<string> ExtractPatternVars(string pattern) {
                 var.clear();
             }
         }
+        else if (c == '{' || c == '}' || c == ',') {
+            throw SyntaxException("MATCH RECOGNIZE: quantifier syntax {m,n} is not supported");
+        }
         else {
-            throw SyntaxException("Invalid character '%c' in PATTERN", c);
+            throw SyntaxException("MATCH RECOGNIZE: invalid character '%c' in PATTERN", c);
         }
     }
     if (!var.empty()) {
@@ -165,6 +168,30 @@ BoundStatement Binder::Bind(MatchRecognizeRef &ref) {
             throw BinderException("Unknown column %s in ORDER BY: %s", order.expression->ToString(), ex.what());
         }
         result.bound_mr.order_by.emplace_back(order.type, order.null_order, std::move(bound_expr));
+    }
+
+    // bind WITHIN (optional)
+    if (ref.within) {
+        unique_ptr<Expression> bound_within;
+        try {
+            bound_within = expr_binder.Bind(ref.within);
+        } catch (const Exception &ex) {
+            throw BinderException("Invalid WITHIN expression: %s", ex.what());
+        }
+        if (bound_within->return_type != LogicalType::INTERVAL) {
+            throw BinderException("WITHIN must be an INTERVAL expression");
+        }
+        if (result.bound_mr.order_by.empty()) {
+            throw BinderException("WITHIN requires ORDER BY");
+        }
+
+        auto order_type = result.bound_mr.order_by[0].expression->return_type.id();
+        if (!(order_type == LogicalTypeId::DATE || order_type == LogicalTypeId::TIME ||
+              order_type == LogicalTypeId::TIME_TZ || order_type == LogicalTypeId::TIMESTAMP ||
+              order_type == LogicalTypeId::TIMESTAMP_TZ)) {
+            throw BinderException("WITHIN requires ORDER BY on a time or date column");
+        }
+        result.bound_mr.within = std::move(bound_within);
     }
 
     // extract all variables from PATTERN

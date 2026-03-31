@@ -168,8 +168,9 @@ void MatchRecognizeRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<MeasureDefinition>>(203, "measures", measures);
 	serializer.WriteProperty<RowsPerMatchType>(204, "rows_per_match", rows_per_match);
 	serializer.WriteProperty<AfterMatchSkipType>(205, "after_match_skip", after_match_skip);
-	serializer.WritePropertyWithDefault<string>(206, "pattern", pattern);
-	serializer.WritePropertyWithDefault<vector<DefineDefinition>>(207, "define", define);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(206, "within", within);
+	serializer.WritePropertyWithDefault<string>(207, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<DefineDefinition>>(208, "define", define);
 }
 
 unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) {
@@ -180,8 +181,9 @@ unique_ptr<TableRef> MatchRecognizeRef::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<MeasureDefinition>>(203, "measures", result->measures);
 	deserializer.ReadProperty<RowsPerMatchType>(204, "rows_per_match", result->rows_per_match);
 	deserializer.ReadProperty<AfterMatchSkipType>(205, "after_match_skip", result->after_match_skip);
-	deserializer.ReadPropertyWithDefault<string>(206, "pattern", result->pattern);
-	deserializer.ReadPropertyWithDefault<vector<DefineDefinition>>(207, "define", result->define);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(206, "within", result->within);
+	deserializer.ReadPropertyWithDefault<string>(207, "pattern", result->pattern);
+	deserializer.ReadPropertyWithDefault<vector<DefineDefinition>>(208, "define", result->define);
 	return std::move(result);
 }
 

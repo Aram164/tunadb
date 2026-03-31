@@ -134,11 +134,12 @@ void BoundMatchRecognizeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<BoundDefine>>(202, "defines", defines);
 	serializer.WritePropertyWithDefault<bool>(203, "one_row_per_match", one_row_per_match);
 	serializer.WritePropertyWithDefault<bool>(204, "skip_to_next_row", skip_to_next_row);
-	serializer.WritePropertyWithDefault<string>(205, "pattern", pattern);
-	serializer.WritePropertyWithDefault<vector<BoundMeasure>>(206, "measures", measures);
-	serializer.WritePropertyWithDefault<vector<string>>(207, "names", names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "types", types);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(209, "measure_input_refs", measure_input_refs);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(205, "within", within);
+	serializer.WritePropertyWithDefault<string>(206, "pattern", pattern);
+	serializer.WritePropertyWithDefault<vector<BoundMeasure>>(207, "measures", measures);
+	serializer.WritePropertyWithDefault<vector<string>>(208, "names", names);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(209, "types", types);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(210, "measure_input_refs", measure_input_refs);
 }
 
 BoundMatchRecognizeInfo BoundMatchRecognizeInfo::Deserialize(Deserializer &deserializer) {
@@ -148,11 +149,12 @@ BoundMatchRecognizeInfo BoundMatchRecognizeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<vector<BoundDefine>>(202, "defines", result.defines);
 	deserializer.ReadPropertyWithDefault<bool>(203, "one_row_per_match", result.one_row_per_match);
 	deserializer.ReadPropertyWithDefault<bool>(204, "skip_to_next_row", result.skip_to_next_row);
-	deserializer.ReadPropertyWithDefault<string>(205, "pattern", result.pattern);
-	deserializer.ReadPropertyWithDefault<vector<BoundMeasure>>(206, "measures", result.measures);
-	deserializer.ReadPropertyWithDefault<vector<string>>(207, "names", result.names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "types", result.types);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(209, "measure_input_refs", result.measure_input_refs);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(205, "within", result.within);
+	deserializer.ReadPropertyWithDefault<string>(206, "pattern", result.pattern);
+	deserializer.ReadPropertyWithDefault<vector<BoundMeasure>>(207, "measures", result.measures);
+	deserializer.ReadPropertyWithDefault<vector<string>>(208, "names", result.names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(209, "types", result.types);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(210, "measure_input_refs", result.measure_input_refs);
 	return result;
 }
 

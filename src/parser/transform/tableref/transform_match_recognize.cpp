@@ -68,6 +68,11 @@ unique_ptr<TableRef> Transformer::TransformMatchRecognize(duckdb_libpgquery::PGM
 	result->after_match_skip = root.skip_to_next_row ? AfterMatchSkipType::SKIP_TO_NEXT_ROW
 	                                                  : AfterMatchSkipType::SKIP_PAST_LAST_ROW;
 
+	// Transform WITHIN clause
+	if (root.within) {
+		result->within = TransformExpression(root.within);
+	}
+
 	// PATTERN — stored as a raw string, parsed later during NFA construction
 	if (root.pattern) {
 		result->pattern = root.pattern;

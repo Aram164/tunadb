@@ -1053,6 +1053,7 @@ match_recognize_clause:
         mr_after_match_skip_clause
         mr_opt_within_clause
         mr_pattern_clause
+        mr_opt_subset_clause
         mr_define_clause
     ')'
 	{
@@ -1061,7 +1062,7 @@ match_recognize_clause:
 		/*
          * GRM6:
          *   $3 partition, $4 order, $5 measures, $6 rows_per_match, $7 after_match_skip,
-         *   $8 within, $9 pattern, $10 define, @11 = ')'
+         *   $8 within, $9 pattern, $10 subset, $11 define, @12 = ')'
          */
 
         /* bestmoeglicher Anker für Fehlermeldungen: naechste vorhandene Klausel, sonst ')' */
@@ -1070,8 +1071,8 @@ match_recognize_clause:
             ($6 != -1)    ? @6  :   /* ROWS PER MATCH */
             ($7 != -1)    ? @7  :   /* AFTER MATCH SKIP */
             ($9 != NULL)  ? @9  :   /* PATTERN */
-            ($10 != NIL)  ? @10 :   /* DEFINE */
-                            @11;    /* ')' */
+            ($11 != NIL)  ? @11 :   /* DEFINE */
+                            @12;    /* ')' */
 
         if ($4 == NIL) {
             ereport(ERROR,
@@ -1093,17 +1094,17 @@ match_recognize_clause:
                      parser_errposition(pos)));
         }
         if ($9 == NULL) {
-            int pos = ($10 != NIL) ? @10 : @11; /* DEFINE falls vorhanden, sonst ')' */
+            int pos = ($11 != NIL) ? @11 : @12; /* DEFINE falls vorhanden, sonst ')' */
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing PATTERN clause"),
                      parser_errposition(pos)));
         }
-        if ($10 == NIL) {
+        if ($11 == NIL) {
             ereport(ERROR,
                     (errcode(PG_ERRCODE_SYNTAX_ERROR),
                      errmsg("MATCH RECOGNIZE: missing DEFINE clause"),
-                     parser_errposition(@11)));
+                     parser_errposition(@12)));
         }
 
         n->partition = (PGList *) $3;
@@ -1123,12 +1124,10 @@ match_recognize_clause:
             n->skip_past_last_row = (skip == 0);
         }
 
-        // TODO: GRM5/TW1 parse and store WITHIN + structured MEASURES/DEFINE data.
-
-        n->within = nullptr;
+        n->within = $8;
 
         n->pattern = $9;
-        n->define = (PGList *) $10;
+        n->define = (PGList *) $11;
 
         $$ = (PGNode *) n;
 	}
@@ -1298,12 +1297,18 @@ mr_skip_option:
 			| PAST LAST_P ROW 	{ $$ = 0; }	/* "LAST" is read as "LAST_P" smh, look at kwlist.hpp */
 ;
 
-/* change here for TW1 */
 mr_opt_within_clause:
-			WITHIN
+			WITHIN Iconst opt_interval
 				{
-					// TODO: TW1 parse WITHIN time window expression.
-					$$ = nullptr;
+					$$ = makeIntervalNode($2, @2, $3);
+				}
+			| WITHIN Sconst
+				{
+					$$ = makeIntervalNode($2, @2, NIL);
+				}
+			| WITHIN a_expr
+				{
+					$$ = $2;
 				}
 			| /* EMPTY */
 				{
@@ -1315,6 +1320,21 @@ mr_pattern_clause:
 			PATTERN '(' Sconst ')'
 				{
 					$$ = $3;
+				}
+			| /* EMPTY */
+				{
+					$$ = NULL;
+				}
+;
+
+mr_opt_subset_clause:
+			SUBSET
+				{
+					$$ = NULL;
+					ereport(ERROR,
+							(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("MATCH RECOGNIZE: SUBSET is not supported"),
+							 parser_errposition(@1)));
 				}
 			| /* EMPTY */
 				{

@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/match_recognize/mr_nfa.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "nfa.hpp"
 
 #include <iostream>
@@ -12,9 +13,16 @@ namespace duckdb {
 vector<MRMatchResult> MRRunPatternMatching(const string &pattern, idx_t num_rows, const unordered_map<string, vector<bool>> &var_masks, bool skip_to_next_row) {
 	Lexer lexer(pattern);
     Parser parser(lexer);
-    Node* ast = parser.parse_pattern();
-    NFA nfa = build_from_AST(ast);
-    delete(ast);
+    Node *ast = nullptr;
+    NFA nfa;
+    try {
+        ast = parser.parse();
+        nfa = build_from_AST(ast);
+        delete ast;
+    } catch (const std::runtime_error &ex) {
+        delete ast;
+        throw InvalidInputException("MATCH RECOGNIZE: invalid PATTERN '%s': %s", pattern, ex.what());
+    }
 
 	auto masks = var_masks;
 
@@ -53,6 +61,9 @@ vector<MRMatchResult> MRRunPatternMatching(const string &pattern, idx_t num_rows
 		Simulation sim(nfa);
 		const Run *longest_match = sim.find_matches(sim, start_pos, end_pos, skip_to_next_row);
 		if (!longest_match) {
+			continue;
+		}
+		if (longest_match->bindings.empty()) {
 			continue;
 		}
 

@@ -34,6 +34,18 @@ SELECT count(*) FROM t MATCH_RECOGNIZE (
 ----
 1
 
+# --- Empty matches must be skipped ---
+query I
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES COUNT(*) AS cnt
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A*')
+    DEFINE A AS FALSE
+)
+----
+0
+
 # --- Pattern "A B+", SKIP PAST LAST ROW ---
 # Greedy: one A (row 0) then B+ consumes rows 1-3 -> 1 match
 query I
@@ -46,6 +58,31 @@ SELECT count(*) FROM t MATCH_RECOGNIZE (
 )
 ----
 1
+
+# --- Alternation: "A | B" should match either branch ---
+query I
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES COUNT(*) AS cnt
+    AFTER MATCH SKIP TO NEXT ROW
+    PATTERN ('A | B')
+    DEFINE A AS A.id = 1, B AS B.id = 4
+)
+----
+2
+
+# --- Precedence: alternation binds weaker than concatenation ---
+# "A | B C" must parse as "A | (B C)"
+query I
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES COUNT(*) AS cnt
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A | B C')
+    DEFINE A AS A.id = 1, B AS B.id = 2, C AS C.id = 3
+)
+----
+2
 
 # --- PARTITION BY: two groups matched independently ---
 # group p=1: 3 rows, "A+" -> 1 match
@@ -128,6 +165,37 @@ SELECT cnt_a FROM t MATCH_RECOGNIZE (
 ----
 1
 
+# --- ALL ROWS PER MATCH: output one row for each row in the match ---
+query I
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    ALL ROWS PER MATCH
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A B+')
+    DEFINE A AS A.id >= 0, B AS B.id >= 0
+)
+----
+4
+
+# --- NULL in DEFINE counts as false ---
+statement ok
+CREATE TABLE t_null(val INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO t_null VALUES (NULL, 1), (5, 2), (NULL, 3), (7, 4);
+
+query I
+SELECT count(*) FROM t_null MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.val AS m
+    AFTER MATCH SKIP TO NEXT ROW
+    PATTERN ('A')
+    DEFINE A AS A.val > 0
+)
+----
+2
+
 # --- PREV(): decreasing rows after the first row should match ---
 statement ok
 CREATE TABLE t_prev(id INTEGER, price INTEGER, ts INTEGER, p INTEGER);
@@ -165,6 +233,43 @@ SELECT count(*) FROM t_prev_big MATCH_RECOGNIZE (
 )
 ----
 1
+
+# --- Unsupported bounded quantifiers should raise a clear error ---
+statement error
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A{1,2}')
+    DEFINE A AS A.id >= 0
+)
+----
+quantifier syntax {m,n}
+
+# --- Reluctant quantifiers should raise a clear error ---
+statement error
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A*?')
+    DEFINE A AS A.id >= 0
+)
+----
+Reluctant quantifiers are not supported
+
+# --- SUBSET should raise a clear unsupported error ---
+statement error
+SELECT count(*) FROM t MATCH_RECOGNIZE (
+    ORDER BY ts
+    MEASURES A.id AS m
+    AFTER MATCH SKIP PAST LAST ROW
+    PATTERN ('A')
+    SUBSET U = (A)
+    DEFINE A AS A.id >= 0
+)
+----
+SUBSET is not supported
 
 # --- Tie detection: two rows with same ORDER BY value -> error ---
 statement error

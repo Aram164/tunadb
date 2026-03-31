@@ -3,6 +3,10 @@
 
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -158,7 +162,7 @@ struct MatchRecognizeHashGroup {
 class MatchRecognizeGlobalSourceState : public GlobalSourceState {
 public:
 	MatchRecognizeGlobalSourceState(ClientContext &client, MatchRecognizeGlobalSinkState &gsink)
-		: next_group(0), initialized(false) {
+		: next_group(0), initialized(false), within_initialized(false) {
 		auto &sort_strategy = *gsink.sort_strategy;
 		hashed_source = sort_strategy.GetGlobalSourceState(client, *gsink.strategy_sink);
 		auto &hash_groups = sort_strategy.GetHashGroups(*hashed_source);
@@ -179,10 +183,13 @@ public:
     unique_ptr<GlobalSourceState> hashed_source;
     //! The sorted hash groups
     vector<unique_ptr<MatchRecognizeHashGroup>> match_recognize_hash_groups;
-    //! Index of the next partition to process
+	//! Index of the next partition to process
 	atomic<idx_t> next_group;
 	//! Whether all partitions have been processed into results
 	bool initialized;
+	//! Cached WITHIN interval value
+	bool within_initialized;
+	Value within_value;
 	//! Pre-computed output rows
 	unique_ptr<ColumnDataCollection> results;
 	//! Scan cursor for results
@@ -279,6 +286,83 @@ static void DetectTies(const vector<BoundOrderByNode> &order_by,
 			throw InvalidInputException("MATCH_RECOGNIZE ORDER BY must be a total order (no ties)");
 		}
 	}
+}
+
+static vector<Value> CreateWithinLookup(const BoundOrderByNode &order_by, ColumnDataCollection &partition,
+                                        ClientContext &client) {
+	vector<unique_ptr<Expression>> order_exprs;
+	vector<LogicalType> key_types;
+	order_exprs.push_back(order_by.expression->Copy());
+	key_types.push_back(order_by.expression->return_type);
+
+	ExpressionExecutor executor(client, order_exprs);
+
+	vector<Value> values;
+	values.reserve(partition.Count());
+
+	DataChunk scan_chunk;
+	partition.InitializeScanChunk(scan_chunk);
+	ColumnDataScanState scan_state;
+	partition.InitializeScan(scan_state);
+
+	while (partition.Scan(scan_state, scan_chunk)) {
+		DataChunk key_chunk;
+		key_chunk.Initialize(Allocator::DefaultAllocator(), key_types);
+		executor.Execute(scan_chunk, key_chunk);
+		for (idx_t r = 0; r < scan_chunk.size(); r++) {
+			values.push_back(key_chunk.GetValue(0, r));
+		}
+	}
+	return values;
+}
+
+static bool ExceedsWithin(const Value &start, const Value &end, const Value &within, LogicalTypeId order_type) {
+	if (start.IsNull() || end.IsNull() || within.IsNull()) {
+		return true;
+	}
+
+	interval_t delta;
+	switch (order_type) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		auto start_timestamp = start.GetValue<timestamp_t>();
+		auto end_timestamp = end.GetValue<timestamp_t>();
+		delta = Interval::GetDifference(end_timestamp, start_timestamp);
+		break;
+	}
+	case LogicalTypeId::DATE: {
+		auto start_date = start.GetValue<date_t>();
+		auto end_date = end.GetValue<date_t>();
+		delta = Interval::FromMicro(Date::EpochMicroseconds(end_date) - Date::EpochMicroseconds(start_date));
+		break;
+	}
+	case LogicalTypeId::TIME: {
+		auto start_time = start.GetValue<dtime_t>();
+		auto end_time = end.GetValue<dtime_t>();
+		delta = Interval::FromMicro(end_time.micros - start_time.micros);
+		break;
+	}
+	case LogicalTypeId::TIME_TZ: {
+		auto start_time = Time::NormalizeTimeTZ(start.GetValue<dtime_tz_t>());
+		auto end_time = Time::NormalizeTimeTZ(end.GetValue<dtime_tz_t>());
+		delta = Interval::FromMicro(end_time.micros - start_time.micros);
+		break;
+	}
+	default:
+		throw InvalidInputException("WITHIN requires ORDER BY on a time or date column");
+	}
+
+	auto delta_micros = Interval::GetMicro(delta);
+	if (delta_micros < 0) {
+		delta_micros = -delta_micros;
+	}
+
+	auto within_interval = within.GetValue<interval_t>();
+	auto within_micros = Interval::GetMicro(within_interval);
+	if (within_micros < 0) {
+		throw InvalidInputException("WITHIN interval must be non-negative");
+	}
+	return delta_micros > within_micros;
 }
 
 //===--------------------------------------------------------------------===//
@@ -634,6 +718,18 @@ SourceResultType PhysicalMatchRecognize::GetDataInternal(ExecutionContext &conte
 		lsource.local_source = sort_strategy.GetLocalSourceState(context, *gsource.hashed_source);
 	}
 
+	const bool use_within = bound_mr.within != nullptr;
+	if (use_within && !gsource.within_initialized) {
+		if (bound_mr.within->HasParameter() || !bound_mr.within->IsFoldable()) {
+			throw InvalidInputException("WITHIN must be a constant INTERVAL expression");
+		}
+		gsource.within_value = ExpressionExecutor::EvaluateScalar(client, *bound_mr.within);
+		if (gsource.within_value.IsNull()) {
+			throw InvalidInputException("WITHIN interval must not be NULL");
+		}
+		gsource.within_initialized = true;
+	}
+
 	// Process all partitions on the first call and buffer results
 	if (!gsource.initialized) {
 		// we need a ColumnDataCollection as a buffer to store all match results
@@ -677,12 +773,29 @@ SourceResultType PhysicalMatchRecognize::GetDataInternal(ExecutionContext &conte
 
 			// turn DEFINEs into boolean masks (one for each variable)
 			auto var_masks = EvaluateDefines(bound_mr.defines, *partition_data, client);
+
+			vector<Value> order_values;
+			LogicalTypeId order_type = LogicalTypeId::INVALID;
+			if (use_within) {
+				order_values = CreateWithinLookup(bound_mr.order_by[0], *partition_data, client);
+				order_type = bound_mr.order_by[0].expression->return_type.id();
+			}
 	
 			// Run NFA matching
 			auto matches = MRRunPatternMatching(bound_mr.pattern, num_rows, var_masks, bound_mr.skip_to_next_row);
 
 			// compute MEASURES and emit output rows
 			for (auto &match : matches) {
+				if (use_within) {
+					idx_t start_idx = match.match_start;
+					idx_t end_idx = match.match_end > 0 ? match.match_end - 1 : match.match_start;
+					if (start_idx >= order_values.size() || end_idx >= order_values.size()) {
+						continue;
+					}
+					if (ExceedsWithin(order_values[start_idx], order_values[end_idx], gsource.within_value, order_type)) {
+						continue;
+					}
+				}
 				// ONE ROW PER MATCH
 				if (bound_mr.one_row_per_match) {
 

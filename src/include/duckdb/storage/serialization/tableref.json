@@ -275,10 +275,14 @@
         "type": "AfterMatchSkipType"
       },
       { "id": 206,
+        "name": "within",
+        "type": "ParsedExpression*"
+      },
+      { "id": 207,
         "name": "pattern",
         "type": "string"
       },
-      { "id": 207,
+      { "id": 208,
         "name": "define",
         "type": "vector<DefineDefinition>"
       }

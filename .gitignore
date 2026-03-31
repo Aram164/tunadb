@@ -297,6 +297,11 @@ CMakeUserPresets.json
 
 # Generated documentation
 docs
+!docs/
+!docs/DOC1.md
+!docs/stocks_v_shape.sql
+!docs/sensor_spike_recovery.sql
+!docs/web_session_funnel.sql
 
 # tests
 test/test.sql

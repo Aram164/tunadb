@@ -46,6 +46,36 @@ For development, DuckDB requires [CMake](https://cmake.org), Python 3 and a `C++
 
 Please also refer to our [Build Guide](https://duckdb.org/docs/stable/dev/building/overview) and [Contribution Guide](CONTRIBUTING.md).
 
+### MATCH_RECOGNIZE Semester Project
+
+The `MATCH_RECOGNIZE` implementation in this repository can be built and tested with the normal DuckDB build system.
+
+Build:
+
+```bash
+GEN=ninja DISABLE_SANITIZER=1 make debug
+```
+
+Run the focused SQL tests for the semester project:
+
+```bash
+build/debug/test/unittest "test/sql/match_recognize/nfa.test"
+build/debug/test/unittest "test/sql/match_recognize/prev.test"
+build/debug/test/unittest "test/sql/match_recognize/within.test"
+```
+
+If you changed the `libpg_query` grammar files, regenerate the parser before building:
+
+```bash
+python3 scripts/generate_grammar.py
+```
+
+Optional formatting check:
+
+```bash
+make format-check
+```
+
 ## Support
 
 See the [Support Options](https://duckdblabs.com/support/) page and the dedicated [`endoflife.date`](https://endoflife.date/duckdb) page.

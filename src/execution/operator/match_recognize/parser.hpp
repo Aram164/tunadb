@@ -33,6 +33,7 @@ struct Parser {
     Token peek();
     Token consume();
 
+    Node* parse();
     Node* parse_pattern();
     Node* parse_branch();
     Node* parse_piece();

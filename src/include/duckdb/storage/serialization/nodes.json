@@ -476,22 +476,26 @@
       "type": "bool"
     },
     { "id": 205,
+      "name": "within",
+      "type": "Expression*"
+    },
+    { "id": 206,
       "name": "pattern",
       "type": "string"
     },
-    { "id": 206,
+    { "id": 207,
       "name": "measures",
       "type": "vector<BoundMeasure>"
     },
-    { "id": 207,
+    { "id": 208,
       "name": "names",
       "type": "vector<string>"
     },
-    { "id": 208,
+    { "id": 209,
       "name": "types",
       "type": "vector<LogicalType>"
     },
-    { "id": 209,
+    { "id": 210,
       "name": "measure_input_refs",
       "type": "vector<Expression*>"
     }
